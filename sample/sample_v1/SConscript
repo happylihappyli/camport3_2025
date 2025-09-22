@@ -1,0 +1,228 @@
+import os
+from os.path import join, exists, normpath
+import os
+
+# ==============================================================================
+# Sample_v1 示例程序构建配置总结
+# ==============================================================================
+# 示例概述：
+#   - 当前配置仅编译不依赖OpenCV的示例程序（ListDevices和ForceDeviceIP）
+#   - 这些示例专注于设备枚举和网络设置等基础功能
+#   - 输出目录：统一输出到bin目录（不带_v2后缀）
+#   - 依赖库：tycam库和common_lib
+#   - 注意事项：由于系统未安装OpenCV，其他依赖OpenCV的示例暂时无法编译
+# ==============================================================================
+
+# 导入环境变量、bin目录路径和common_lib
+Import('env', 'bin_dir', 'common_lib')
+
+# 定义to_bool函数
+def to_bool(val):
+    return str(val).lower() in ('true', '1', 'yes', 'y')
+
+print("Current SConscript directory: %s" % os.getcwd())
+print("Initial CPPPATH: %s" % env['CPPPATH'])
+print("Initial LIBS: %s" % env['LIBS'])
+
+# 修复头文件路径 - 确保sample_v2/hpp路径正确
+# 相对于sample_v1目录，sample_v2/hpp位于"../sample_v2/hpp"
+# 我们需要确保这个路径被正确添加
+# 首先检查当前CPPPATH中是否已经有正确的路径
+correct_path_found = False
+for path in env['CPPPATH']:
+    if 'sample_v2' in path and 'hpp' in path:
+        correct_path_found = True
+        break
+
+if not correct_path_found:
+    sample_v2_hpp_path = normpath(os.path.join('..', 'sample_v2', 'hpp'))
+    if exists(sample_v2_hpp_path):
+        env.Append(CPPPATH=[sample_v2_hpp_path])
+        print("Added correct sample_v2/hpp path: %s" % sample_v2_hpp_path)
+
+# 重新定义不依赖OpenCV的示例列表
+# 经过验证，以下示例基本不依赖OpenCV进行编译
+SAMPLES_WITHOUT_OPENCV = [
+    'ListDevices',    # 只列出设备，不显示图像
+    'ForceDeviceIP'   # 强制设置设备IP，不显示图像
+]
+
+# 定义所有示例（包含依赖OpenCV的示例）
+ALL_SAMPLES = [
+    'DumpAllFeatures',
+    'DumpCalibInfo',
+    'ListDevices',
+    'LoopDetect',
+    'ForceDeviceIP',
+    'NetStatistic',
+    'DeviceStorage',
+    'SimpleView_FetchFrame',
+    'SimpleView_Callback',
+    'SimpleView_Registration',
+    'SimpleView_PixelsRegistration',
+    'SimpleView_FetchHisto',
+    'SimpleView_MultiDevice',
+    'SimpleView_TriggerMode0',
+    'SimpleView_TriggerMode1',
+    'SimpleView_TriggerMode20',
+    'SimpleView_TriggerMode21',
+    'SimpleView_TriggerMode28',
+    'SimpleView_TriggerMode29',
+    'SimpleView_TriggerMode30',
+    'SimpleView_TriggerMode31',
+    'SimpleView_TriggerMode_M2S1',
+    'SimpleView_TriggerMode_M3S1',
+    'SimpleView_KeepAlive',
+    'SimpleView_TriggerDelay',
+    'SimpleView_StreamAsync',
+    'SimpleView_StreamAsync1',
+    'SimpleView_ImuData',
+    'SimpleView_DI_DO',
+    'SimpleView_OpenWithIP',
+    'SimpleView_HDR',
+    'SimpleView_SGBM',
+    'SimpleView_XYZ48',
+    'SimpleView_SaveLoadConfig'
+]
+
+# 需要OpenGL/GLUT的示例
+SAMPLES_USED_GLUT = [
+    'SimpleView_Point3D',
+    'SimpleView_Point3D_XYZ48'
+]
+
+# 如果启用了OpenGL视图，添加相关示例
+if to_bool(env.get('OPENGL_VIEW', '0')):
+    ALL_SAMPLES.extend(SAMPLES_USED_GLUT)
+
+print("Updated CPPPATH: %s" % env['CPPPATH'])
+
+# 只编译不依赖OpenCV的示例
+# 因为系统中没有安装OpenCV，无法构建依赖OpenCV的示例
+print("Building only samples that do not depend on OpenCV...")
+for sample in SAMPLES_WITHOUT_OPENCV:
+    sample_dir = sample
+    
+    # 检查示例目录是否存在
+    if exists(sample_dir):
+        # 获取示例目录下的所有源文件
+        sample_sources = env.Glob(join(sample_dir, '*.cpp'))
+        sample_sources.extend(env.Glob(join(sample_dir, '*.c')))
+        
+        if sample_sources:
+            # 创建示例程序
+            # 首先确保当前目录在LIBPATH中
+            if os.getcwd() not in env['LIBPATH']:
+                env.Append(LIBPATH=[os.getcwd()])
+                print(f"Added current directory to LIBPATH: {os.getcwd()}")
+            
+            # 创建示例程序
+            # 移除旧的程序创建代码，使用下面的sample_env来创建程序
+            
+            # 检查tyimgproc.lib是否存在
+            import os
+            tyimgproc_lib_found = False
+            for lib_path in env['LIBPATH']:
+                if os.path.exists(os.path.join(lib_path, 'tyimgproc.lib')):
+                    tyimgproc_lib_found = True
+                    break
+            
+            # 确保链接库已经包含必要的库
+            # common_lib和tycam是必需的
+            required_libs = ['common_lib', 'tycam']
+            for lib in required_libs:
+                if lib not in env['LIBS']:
+                    env.Append(LIBS=[lib])
+                    print("Added missing library: %s" % lib)
+            
+            # 确保OpenCV库被正确链接
+            opencv_libs = []
+            for lib in env['LIBS']:
+                if 'opencv_world' in lib:
+                    opencv_libs.append(lib)
+            
+            # 创建一个包含所有必要库的临时列表
+            all_libs = list(required_libs)  # 从必需库开始
+            
+            # 添加OpenCV库
+            if opencv_libs:
+                all_libs.extend(opencv_libs)
+                print(f"Including OpenCV libraries: {opencv_libs}")
+            
+            # 添加tyimgproc库（如果存在）
+            if tyimgproc_lib_found:
+                all_libs.append('tyimgproc')
+                print("Including optional library: tyimgproc")
+            
+            # 为这个特定的示例创建一个临时环境，确保使用正确的库
+            sample_env = env.Clone()
+            sample_env.Append(LIBS=all_libs)
+            print(f"Building {sample} with libraries: {all_libs}")
+            
+            # 使用临时环境创建示例程序，将输出路径设置为bin目录
+            # 并添加所有必要的库作为依赖项
+            target_path = os.path.join(bin_dir, sample)
+            program = sample_env.Program(
+                target=target_path,
+                source=sample_sources,
+                LIBS=['tycam', common_lib]  # 确保包含tycam库和common_lib
+            )
+            print(f"Executable will be built to: {target_path}.exe")
+            print(f"Including libraries: tycam, common_lib")
+            
+            # 调试输出
+            print("Building sample: %s" % sample)
+            print("Source files: %s" % sample_sources)
+            print("Final LIBS for %s: %s" % (sample, sample_env['LIBS']))
+            
+            # 如果是使用GLUT的示例，添加相关库
+            if sample in SAMPLES_USED_GLUT and to_bool(env.get('OPENGL_VIEW', '0')):
+                # 添加GLUT库路径和库文件
+                glut_inc_path = join(env.get('CLOUD_VIEW_DIR', ''), 'freeglut', 'include')
+                if exists(glut_inc_path):
+                    env.Append(CPPPATH=[glut_inc_path])
+                    print("Added GLUT include path: %s" % glut_inc_path)
+                
+                # 根据平台添加GLUT库
+                if env['PLATFORM'] == 'win32':
+                    env.Append(LIBS=['freeglut', 'opengl32', 'glu32'])
+                else:
+                    env.Append(LIBS=['glut', 'GL', 'GLU'])
+        else:
+            print('Warning: No source files found for sample: %s' % sample)
+    else:
+        print('Warning: Sample directory not found: %s' % sample_dir)
+
+print('All sample_v1 examples have been processed.')
+
+# 编译完成后，显示已生成和更新的可执行文件信息
+print('\n===== Compilation Summary =====')
+print(f'Executables have been built to bin directory: {bin_dir}')
+
+# 检查bin目录中的可执行文件
+if os.path.exists(bin_dir):
+    generated_files = []
+    for file in os.listdir(bin_dir):
+        if file.endswith('.exe'):
+            file_path = os.path.join(bin_dir, file)
+            # 获取文件的修改时间
+            mtime = os.path.getmtime(file_path)
+            # 格式化时间
+            from datetime import datetime
+            mod_time = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+            # 获取文件大小
+            size = os.path.getsize(file_path) / 1024  # KB
+            generated_files.append((file, mod_time, size))
+    
+    if generated_files:
+        print(f'Total {len(generated_files)} executable(s) generated/updated:')
+        # 打印文件信息表格
+        print(f'{'File Name':<25} {'Modified Time':<20} {'Size (KB)':<10}')
+        print('-' * 55)
+        for file, mod_time, size in generated_files:
+            print(f'{file:<25} {mod_time:<20} {size:.2f}')
+    else:
+        print('No executables were generated in the bin directory.')
+else:
+    print(f'Bin directory not found: {bin_dir}')
+print('==============================')

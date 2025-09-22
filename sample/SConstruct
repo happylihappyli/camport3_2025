@@ -1,0 +1,183 @@
+import os
+import sys
+from os.path import join, abspath, exists
+from SCons.Script import *
+import time
+import re
+
+# 全局编译统计信息
+build_start_time = time.time()
+compile_errors = 0
+compile_warnings = 0
+
+# 自定义构建器，用于捕获编译输出
+def build_with_error_tracking(env):
+    # 复制现有C++构建器
+    cxx_builder = env['BUILDERS'].get('CXX', None)
+    if cxx_builder:
+        original_action = cxx_builder.action
+        
+        # 定义包装操作
+        def wrapped_action(target, source, env):
+            global compile_errors, compile_warnings
+            try:
+                # 执行原始构建操作
+                result = original_action(target, source, env)
+                
+                # 如果result是一个字符串（输出），解析它
+                if isinstance(result, str):
+                    # 简单的正则表达式来识别错误和警告
+                    errors = re.findall(r'error|致命错误', result, re.IGNORECASE)
+                    warnings = re.findall(r'warning', result, re.IGNORECASE)
+                    compile_errors += len(errors)
+                    compile_warnings += len(warnings)
+                
+                return result
+            except Exception as e:
+                compile_errors += 1
+                print(f"Build error: {e}")
+                return 1  # 表示失败
+        
+        # 替换构建器的action
+        cxx_builder.action = wrapped_action
+    
+    return env
+
+# 输出编译总结
+def print_compile_summary():
+    global compile_errors, compile_warnings
+    build_end_time = time.time()
+    elapsed_time = build_end_time - build_start_time
+    
+    print("\n" + "=" * 80)
+    print("                    Camport3 编译总结                    ")
+    print("=" * 80)
+    print(f"编译耗时: {elapsed_time:.2f} 秒")
+    
+    # 检查是否有成功编译的可执行文件
+    bin_dir = os.path.abspath('bin')
+    if os.path.exists(bin_dir):
+        executables = [f for f in os.listdir(bin_dir) if f.endswith('.exe')]
+        sample_v1_exes = [f for f in executables if not f.endswith('_v2.exe')]
+        sample_v2_exes = [f for f in executables if f.endswith('_v2.exe')]
+        
+        print(f"\n成功编译的可执行文件:")
+        print(f"Sample_v1 可执行文件数量: {len(sample_v1_exes)}")
+        for exe in sample_v1_exes:
+            print(f"  - {exe}")
+            
+        print(f"Sample_v2 可执行文件数量: {len(sample_v2_exes)}")
+        for exe in sample_v2_exes:  # 只显示前5个sample_v2可执行文件
+            print(f"  - {exe}")
+    
+    # 显示编译错误和警告统计
+    print(f"\n编译统计:")
+    print(f"编译错误数量: {compile_errors}")
+    print(f"编译警告数量: {compile_warnings}")
+    
+    # 判断编译状态
+    success = os.path.exists(bin_dir) and len([f for f in os.listdir(bin_dir) if f.endswith('.exe')]) > 0 and compile_errors == 0
+    print(f"编译状态: {'成功' if success else '失败'}")
+    
+    print("=" * 80)
+    print("编译总结已完成。")
+    print("=" * 80)
+
+# ==============================================================================
+# Camport3项目构建配置总结
+# ==============================================================================
+# 项目概述：
+#   - 包含两个版本的示例程序：sample_v1（基础示例）和sample_v2（更新版示例）
+#   - 统一输出目录：所有可执行文件都生成到bin目录
+#   - 主要依赖：tycam库、common_lib（项目内部公共库）
+#   - 注意事项：当前配置不包含OpenCV依赖，使用非OpenCV实现路径
+#   - 支持平台：当前专注于Windows x64平台
+# ==============================================================================
+
+print("Using simplified SConstruct for troubleshooting OpenCV linking issues")
+
+# 设置构建选项
+opts = Variables()
+opts.Add('OPENCV_DIR', 'Path to OpenCV installation directory', '')
+
+# 强制只构建sample_v1，禁用sample_v2
+opts.Add('BUILD_SAMPLE_V1', 'Enable sample v1 build', '1')
+opts.Add('BUILD_SAMPLE_V2', 'Enable sample v2 build', '0')
+
+# 创建统一的bin目录，用于存放所有可执行文件
+bin_dir = os.path.abspath('bin')
+if not os.path.exists(bin_dir):
+    os.makedirs(bin_dir)    # 创建bin目录
+    print(f"Created bin directory: {bin_dir}")
+
+env = Environment(variables=opts)
+
+# 设置基本路径
+LIB_ROOT_PATH = abspath('../lib/win/hostapp/')
+INCLUDE_PATH = abspath('../include/')
+COMMON_DIR = abspath('./common/')
+
+# 平台特定配置 - 只关注Windows平台
+if sys.platform == 'win32':
+    # Windows配置
+    env.Append(CPPPATH=[INCLUDE_PATH, COMMON_DIR])
+    
+    # 定义WIN32宏，移除OpenCV依赖
+    env.Append(CPPDEFINES=['WIN32'])
+    
+    # 添加编译选项
+    env.Append(CXXFLAGS=['/EHsc'])
+
+    # 架构选择
+    lib_arch = 'x64'  # 假设使用64位架构
+    lib_path = join(LIB_ROOT_PATH, lib_arch)
+    env.Append(LIBPATH=[lib_path])
+    
+    # 添加基本库
+    env.Append(LIBS=['tycam'])
+    
+    # 完全移除OpenCV依赖，因为系统中没有安装OpenCV
+    print("Building without OpenCV dependency")
+    # 确保OPENCV_DEPENDENCIES宏未定义，这样代码会使用非OpenCV的实现路径
+
+# 启用编译错误和警告跟踪
+env = build_with_error_tracking(env)
+
+# 定义common源文件
+common_sources = [
+    join(COMMON_DIR, 'MatViewer.cpp'),
+    join(COMMON_DIR, 'TYThread.cpp'),
+    join(COMMON_DIR, 'crc32.cpp'),
+    join(COMMON_DIR, 'json11.cpp'),
+    join(COMMON_DIR, 'ParametersParse.cpp'),
+    join(COMMON_DIR, 'huffman.cpp'),
+    join(COMMON_DIR, 'ImageSpeckleFilter.cpp'),
+    join(COMMON_DIR, 'DepthInpainter.cpp')
+]
+
+# 为common_lib创建专用环境，不包含任何OpenCV依赖
+common_env = env.Clone()
+
+# 确保common_lib不依赖任何OpenCV库
+common_lib = common_env.Library('common_lib', common_sources)
+
+# 明确将common_lib添加到环境的LIBS中，确保链接时可以找到
+env.Append(LIBS=['common_lib'])
+
+# 先构建common_lib，再构建示例程序
+export_libs = {'env': env, 'bin_dir': bin_dir, 'common_lib': common_lib}
+SConscript('sample_v1/SConscript', exports=export_libs)
+
+# 先构建common_lib，再构建示例程序
+export_libs = {'env': env, 'bin_dir': bin_dir, 'common_lib': common_lib}
+SConscript('sample_v1/SConscript', exports=export_libs)
+
+# 编译sample_v2示例目录
+print("开始编译sample_v2目录")
+SConscript('sample_v2/sample/SConscript', exports={'env': env.Clone(), 'bin_dir': bin_dir, 'common_lib': common_lib})
+
+print("Simplified SConstruct configuration completed.")
+
+# 在SCons构建结束时调用编译总结函数
+import atexit
+atexit.register(print_compile_summary)

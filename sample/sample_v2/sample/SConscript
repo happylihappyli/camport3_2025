@@ -1,0 +1,142 @@
+import os
+from os.path import join, exists, normpath
+import os
+
+# ==============================================================================
+# Sample_v2 示例程序构建配置总结
+# ==============================================================================
+# 示例概述：
+#   - 包含16个示例程序，涵盖设备枚举、深度流获取、参数设置等功能
+#   - 输出命名规则：所有示例程序均添加_v2后缀并统一输出到bin目录
+#   - 核心源文件：Device.cpp和Frame.cpp，实现了相机访问和数据处理基础功能
+#   - 命名空间：主要使用percipio_layer命名空间
+#   - 依赖库：tycam库和common_lib
+#   - 可选依赖：OpenCV（当前配置未启用）
+# ==============================================================================
+
+# 导入环境变量、bin目录路径和common_lib
+Import('env', 'bin_dir', 'common_lib')
+
+# 定义to_bool函数
+def to_bool(val):
+    return str(val).lower() in ('true', '1', 'yes', 'y')
+
+print("Current sample_v2/sample/SConscript directory: %s" % os.getcwd())
+print("Initial CPPPATH for sample_v2: %s" % env['CPPPATH'])
+print("Initial LIBS for sample_v2: %s" % env['LIBS'])
+
+# 修复头文件路径问题 - 添加正确的sample_v2/hpp路径
+# 在SCons中获取当前目录绝对路径
+current_dir = env.Dir('.').srcnode().abspath
+sample_v2_hpp_path = os.path.abspath(os.path.join(current_dir, '..', 'hpp'))
+
+# 确保sample_v2/hpp路径正确添加到CPPPATH
+if sample_v2_hpp_path not in env['CPPPATH']:
+    env.Append(CPPPATH=[sample_v2_hpp_path])
+    print("Added correct sample_v2/hpp path: %s" % sample_v2_hpp_path)
+
+print("Updated CPPPATH for sample_v2: %s" % env['CPPPATH'])
+
+# 定义示例组
+ALL_CPP_API_SAMPLES = [
+    'ListDevices',
+    'ForceDeviceIP', 
+    'DepthStream',
+    'TofDepthStream',
+    'SoftTrigger',
+    'ExposureTimeSetting',
+    'ResolutionSetting',
+    'OfflineReconnection',
+    'MultiDeviceOfflineReconnection',
+    'OpenWithIP',
+    'OpenWithInterface',
+    'NetStatistic',
+    'SaveLoadConfig',
+    'GetCalibData',
+    'PointCloud',
+    'StreamAsync'
+]
+
+SAMPLES_DEPENDS_OPENCV = [
+    'Registration',
+    'IREnhance'
+]
+
+# 如果启用了OpenCV支持，添加依赖OpenCV的示例
+if to_bool(env.get('BUILD_SAMPLE_V2_WITH_OPENCV', '0')):
+    print("OpenCV support enabled for sample_v2")
+    ALL_CPP_API_SAMPLES.extend(SAMPLES_DEPENDS_OPENCV)
+    # 再次确认OpenCV路径是否正确
+    if 'OPENCV_DIR' in env and env['OPENCV_DIR']:
+        print("Using OpenCV from: %s" % env['OPENCV_DIR'])
+    else:
+        print("Warning: OPENCV_DIR is not set properly")
+
+# 编译sample_v2的核心库文件
+sample_v2_cpp_path = os.path.abspath(os.path.join(current_dir, '..', 'cpp'))
+core_sources = [
+    os.path.join(sample_v2_cpp_path, 'Device.cpp'),
+    os.path.join(sample_v2_cpp_path, 'Frame.cpp')
+]
+
+# 确保源文件存在
+for src in core_sources:
+    if not os.path.exists(src):
+        print(f"Warning: Source file not found: {src}")
+
+# 编译所有示例
+for sample in ALL_CPP_API_SAMPLES:
+    sample_dir = sample
+    sample_exec = sample + '_v2'
+    
+    # 设置可执行文件输出到bin目录
+    target_path = os.path.join(bin_dir, sample_exec)
+    
+    # 检查示例目录是否存在
+    if exists(sample_dir):
+        # 获取示例目录下的所有源文件
+        sample_sources = env.Glob(join(sample_dir, '*.cpp'))
+        
+        # 添加核心源文件到每个示例的源文件列表
+        sample_sources.extend(core_sources)
+        
+        if sample_sources:
+            # 创建示例程序，指定输出到bin目录
+            # 添加必要的库依赖
+            env.Append(LIBS=['tycam'])
+            program = env.Program(target=target_path, source=sample_sources, LIBS=['tycam', common_lib])
+            
+            # 修复依赖引用 - 使用#表示从根目录开始查找cpp_api_lib
+            # 不使用显式依赖，只通过链接库实现
+            required_libs = ['cpp_api_lib', 'tycam']
+            for lib in required_libs:
+                if lib not in env['LIBS']:
+                    env.Append(LIBS=[lib])
+                    print("Added missing library: %s" % lib)
+            
+            # 检查tyimgproc.lib是否存在，如果存在则添加
+            tyimgproc_lib_found = False
+            for lib_path in env['LIBPATH']:
+                if os.path.exists(os.path.join(lib_path, 'tyimgproc.lib')):
+                    tyimgproc_lib_found = True
+                    break
+            
+            if tyimgproc_lib_found and 'tyimgproc' not in env['LIBS']:
+                env.Append(LIBS=['tyimgproc'])
+                print("Added optional library: tyimgproc")
+            elif not tyimgproc_lib_found and 'tyimgproc' in env['LIBS']:
+                # 如果tyimgproc不在环境中但存在于LIBS中，移除它
+                env['LIBS'].remove('tyimgproc')
+                print("Removed tyimgproc from LIBS as it was not found")
+            
+            # 调试输出
+            print("Building sample: %s -> %s" % (sample, sample_exec))
+            print("Source files: %s" % sample_sources)
+            print("Final LIBS for %s: %s" % (sample_exec, env['LIBS']))
+            print("Final CPPPATH for %s: %s" % (sample_exec, env['CPPPATH']))
+        else:
+            print('Warning: No source files found for sample: %s' % sample)
+    else:
+        print('Warning: Sample directory not found: %s' % sample_dir)
+
+print('All sample_v2 examples have been processed.')
