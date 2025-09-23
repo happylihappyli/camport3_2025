@@ -217,7 +217,7 @@ if os.path.exists(bin_dir):
     if generated_files:
         print(f'Total {len(generated_files)} executable(s) generated/updated:')
         # 打印文件信息表格
-        print(f'{'File Name':<25} {'Modified Time':<20} {'Size (KB)':<10}')
+        # print(f'{'File Name':<25} {'Modified Time':<20} {'Size (KB)':<10}')
         print('-' * 55)
         for file, mod_time, size in generated_files:
             print(f'{file:<25} {mod_time:<20} {size:.2f}')
