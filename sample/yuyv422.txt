@@ -1,0 +1,54 @@
+#include <opencv2/opencv.hpp>
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <cmath>
+
+using namespace cv;
+using namespace std;
+
+// YUV到RGB的转换公式
+void yuv_to_rgb(int y, int u, int v, uchar& r, uchar& g, uchar& b) {
+    // 转换公式
+    int c = y - 16;
+    int d = u - 128;
+    int e = v - 128;
+    
+    r = saturate_cast<uchar>((298 * c + 409 * e + 128) >> 8);
+    g = saturate_cast<uchar>((298 * c - 100 * d - 208 * e + 128) >> 8);
+    b = saturate_cast<uchar>((298 * c + 516 * d + 128) >> 8);
+}
+
+// 方法2：手动解析YUYV数据
+Mat yuyv_to_rgb_manual(const vector<uchar>& yuyv_data, int width, int height) {
+    Mat rgb_frame(height, width, CV_8UC3);
+    
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x += 2) {
+            // 计算数据索引（每4个字节包含2个像素）
+            int idx = y * width * 2 + x * 2;
+            
+            // 提取YUYV分量
+            uchar y0 = yuyv_data[idx];     // 第一个像素的Y
+            uchar u  = yuyv_data[idx + 1]; // U分量
+            uchar y1 = yuyv_data[idx + 2]; // 第二个像素的Y
+            uchar v  = yuyv_data[idx + 3]; // V分量
+            
+            // 转换第一个像素 (Y0, U, V)
+            uchar r0, g0, b0;
+            yuv_to_rgb(y0, u, v, r0, g0, b0);
+            
+            // 转换第二个像素 (Y1, U, V)
+            uchar r1, g1, b1;
+            yuv_to_rgb(y1, u, v, r1, g1, b1);
+            
+            // 设置RGB像素值
+            rgb_frame.at<Vec3b>(y, x) = Vec3b(b0, g0, r0); // OpenCV使用BGR顺序
+            if (x + 1 < width) {
+                rgb_frame.at<Vec3b>(y, x + 1) = Vec3b(b1, g1, r1);
+            }
+        }
+    }
+    
+    return rgb_frame;
+}
