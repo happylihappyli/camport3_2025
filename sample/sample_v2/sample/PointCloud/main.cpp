@@ -69,15 +69,70 @@ TY_STATUS P3DCamera::Init()
     TY_STATUS status;
     std::cout << "开始相机初始化..." << std::endl;
     
-    // 设置深度相机分辨率为1280*960
-    std::cout << "设置深度相机分辨率为1280*960" << std::endl;
-    TY_IMAGE_MODE depth_mode = TYImageMode2(TY_PIXEL_FORMAT_DEPTH16, 1280, 960);
-    status = TYSetEnum(handle(), TY_COMPONENT_DEPTH_CAM, TY_ENUM_IMAGE_MODE, depth_mode);
-    if(status != TY_STATUS_OK) {
-        std::cerr << "深度相机分辨率设置失败，状态码: " << status << std::endl;
-        return status;
+    // 辅助函数：检查并设置相机分辨率
+    auto checkAndSetResolution = [this](TY_COMPONENT_ID component, TY_PIXEL_FORMAT format, int width, int height, const std::string& cameraName) {
+        TY_STATUS res;
+        
+        // 获取相机支持的所有图像模式
+        TY_ENUM_ENTRY modes[20]; // 假设最多支持20种模式
+        uint32_t num_modes = 0;
+        res = TYGetEnumEntryInfo(handle(), component, TY_ENUM_IMAGE_MODE, modes, 20, &num_modes);
+        if (res != TY_STATUS_OK) {
+            std::cerr << cameraName << "获取支持的分辨率模式失败，状态码: " << res << std::endl;
+            return res;
+        }
+        
+        // 打印所有支持的分辨率模式
+                std::cout << cameraName << "支持的分辨率模式: " << std::endl;
+                bool has_target_mode = false;
+                uint32_t target_mode_value = 0;
+                TY_IMAGE_MODE target_mode = TYImageMode2(format, width, height);
+                
+                for (uint32_t i = 0; i < num_modes; i++) {
+                    int w = TYImageWidth(modes[i].value);
+                    int h = TYImageHeight(modes[i].value);
+                    TY_PIXEL_FORMAT pf = TYPixelFormat(modes[i].value);
+                    std::cout << "  [" << i << "] " << modes[i].description << " (" << w << "x" << h << ")" << std::endl;
+                    
+                    // 检查是否支持目标分辨率
+                    if (modes[i].value == target_mode) {
+                        has_target_mode = true;
+                        target_mode_value = modes[i].value;
+                        break;
+                    }
+                }
+                
+                // 设置分辨率
+                if (has_target_mode) {
+                    std::cout << "设置" << cameraName << "分辨率为" << width << "x" << height << std::endl;
+                    res = TYSetEnum(handle(), component, TY_ENUM_IMAGE_MODE, target_mode_value);
+                    if (res != TY_STATUS_OK) {
+                        std::cerr << cameraName << "分辨率设置失败，状态码: " << res << std::endl;
+                    } else {
+                        std::cout << cameraName << "分辨率设置成功" << std::endl;
+                    }
+                } else {
+                    // 使用默认分辨率（第一个可用模式）
+                    if (num_modes > 0) {
+                        int w = TYImageWidth(modes[0].value);
+                        int h = TYImageHeight(modes[0].value);
+                        TY_PIXEL_FORMAT pf = TYPixelFormat(modes[0].value);
+                        std::cout << "警告: " << cameraName << "不支持" << width << "x" << height << "分辨率，使用默认分辨率: " << w << "x" << h << std::endl;
+                        res = TYSetEnum(handle(), component, TY_ENUM_IMAGE_MODE, modes[0].value);
+                    } else {
+                        std::cerr << "错误: " << cameraName << "没有可用的分辨率模式" << std::endl;
+                        res = TY_STATUS_ERROR;
+                    }
+                }
+        
+        return res;
+    };
+    
+    // 设置深度相机分辨率
+    TY_STATUS depth_res = checkAndSetResolution(TY_COMPONENT_DEPTH_CAM, TY_PIXEL_FORMAT_DEPTH16, 1280, 960, "深度相机");
+    if (depth_res != TY_STATUS_OK) {
+        return depth_res;
     }
-    std::cout << "深度相机分辨率设置成功" << std::endl;
     
     status = stream_enable(stream_depth);
     if(status != TY_STATUS_OK) {
@@ -87,15 +142,11 @@ TY_STATUS P3DCamera::Init()
     std::cout << "深度流使能成功" << std::endl;
     
     if(has_stream(stream_color)) { 
-        // 设置RGB相机分辨率为1280*960
-        std::cout << "设置RGB相机分辨率为1280*960" << std::endl;
-        TY_IMAGE_MODE color_mode = TYImageMode2(TY_PIXEL_FORMAT_RGB, 1280, 960);
-        status = TYSetEnum(handle(), TY_COMPONENT_RGB_CAM, TY_ENUM_IMAGE_MODE, color_mode);
-        if(status != TY_STATUS_OK) {
-            std::cerr << "RGB相机分辨率设置失败，状态码: " << status << std::endl;
-            return status;
+        // 设置RGB相机分辨率（YUYV格式）
+        TY_STATUS color_res = checkAndSetResolution(TY_COMPONENT_RGB_CAM, TY_PIXEL_FORMAT_YUYV, 1280, 960, "RGB相机");
+        if (color_res != TY_STATUS_OK) {
+            return color_res;
         }
-        std::cout << "RGB相机分辨率设置成功" << std::endl;
         
         status = stream_enable(stream_color);
         if(status != TY_STATUS_OK) {
@@ -323,7 +374,7 @@ void P3DCamera::processDepth16ToPoint3D(const std::shared_ptr<TYImage>&  depth, 
                 &color_calib,
                 registration_depth->width(), registration_depth->height(), static_cast<uint16_t*>(registration_depth->buffer()), f_depth_scale_unit
             );
-            registration_depth->resize(color_image->width(), color_image->height());
+            //registration_depth->resize(color_image->width(), color_image->height());
             registration_color = color_image;
             p3d.resize(registration_depth->width() * registration_depth->height());
             TYMapDepthImageToPoint3d(&color_calib, registration_depth->width(), registration_depth->height()

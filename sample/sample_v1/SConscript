@@ -164,11 +164,9 @@ for sample in SAMPLES_WITHOUT_OPENCV:
             target_path = os.path.join(bin_dir, sample)
             program = sample_env.Program(
                 target=target_path,
-                source=sample_sources,
-                LIBS=['tycam', common_lib]  # 确保包含tycam库和common_lib
+                source=sample_sources
             )
             print(f"Executable will be built to: {target_path}.exe")
-            print(f"Including libraries: tycam, common_lib")
             
             # 调试输出
             print("Building sample: %s" % sample)

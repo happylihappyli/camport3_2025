@@ -98,11 +98,11 @@ print("Using simplified SConstruct for troubleshooting OpenCV linking issues")
 
 # 设置构建选项
 opts = Variables()
-opts.Add('OPENCV_DIR', 'Path to OpenCV installation directory', '')
+opts.Add('OPENCV_DIR', 'Path to OpenCV installation directory', 'D:\\Code\\opencv')
 
-# 强制只构建sample_v1，禁用sample_v2
+# 构建选项
 opts.Add('BUILD_SAMPLE_V1', 'Enable sample v1 build', '1')
-opts.Add('BUILD_SAMPLE_V2', 'Enable sample v2 build', '0')
+opts.Add('BUILD_SAMPLE_V2', 'Enable sample v2 build', '1')
 
 # 创建统一的bin目录，用于存放所有可执行文件
 bin_dir = os.path.abspath('bin')
@@ -122,23 +122,36 @@ if sys.platform == 'win32':
     # Windows配置
     env.Append(CPPPATH=[INCLUDE_PATH, COMMON_DIR])
     
-    # 定义WIN32宏，移除OpenCV依赖
+    # 定义WIN32宏
     env.Append(CPPDEFINES=['WIN32'])
     
     # 添加编译选项
     env.Append(CXXFLAGS=['/EHsc'])
 
     # 架构选择
-    lib_arch = 'x64'  # 假设使用64位架构
+    lib_arch = 'x64'  # 使用64位架构
     lib_path = join(LIB_ROOT_PATH, lib_arch)
     env.Append(LIBPATH=[lib_path])
     
     # 添加基本库
     env.Append(LIBS=['tycam'])
     
-    # 完全移除OpenCV依赖，因为系统中没有安装OpenCV
-    print("Building without OpenCV dependency")
-    # 确保OPENCV_DEPENDENCIES宏未定义，这样代码会使用非OpenCV的实现路径
+    # 配置OpenCV依赖
+    opencv_dir = env.get('OPENCV_DIR', '')
+    if opencv_dir and os.path.exists(opencv_dir):
+        print(f"Building with OpenCV support from {opencv_dir}")
+        # 添加OpenCV头文件路径
+        env.Append(CPPPATH=[join(opencv_dir, 'build', 'include')])
+        # 添加OpenCV库路径
+        env.Append(LIBPATH=[join(opencv_dir, 'build', 'x64', 'vc15', 'lib')])
+        # 添加OpenCV库文件（只添加Release版本）
+        env.Append(LIBS=['opencv_world347'])
+        # 确保OpenCV库在链接顺序中的位置正确
+        env.Prepend(LIBS=['opencv_world347'])
+        # 定义OPENCV_DEPENDENCIES宏，启用OpenCV相关代码
+        env.Append(CPPDEFINES=['OPENCV_DEPENDENCIES'])
+    else:
+        print("Building without OpenCV dependency")
 
 # 启用编译错误和警告跟踪
 env = build_with_error_tracking(env)
@@ -174,7 +187,18 @@ SConscript('sample_v1/SConscript', exports=export_libs)
 
 # 编译sample_v2示例目录
 print("开始编译sample_v2目录")
-SConscript('sample_v2/sample/SConscript', exports={'env': env.Clone(), 'bin_dir': bin_dir, 'common_lib': common_lib})
+# 为sample_v2创建专用环境
+if opencv_dir and os.path.exists(opencv_dir):
+    # 如果OpenCV路径有效，设置BUILD_SAMPLE_V2_WITH_OPENCV标志为1启用OpenCV支持
+    print("启用sample_v2的OpenCV支持")
+    env['BUILD_SAMPLE_V2_WITH_OPENCV'] = '1'
+    # 创建一个克隆的环境，并移除program方法调用中可能覆盖LIBS的问题
+    sample_v2_env = env.Clone()
+    # 直接传递原始环境，确保OpenCV链接配置正确应用
+    SConscript('sample_v2/sample/SConscript', exports={'env': env, 'bin_dir': bin_dir, 'common_lib': common_lib})
+else:
+    # 不使用OpenCV时的默认行为
+    SConscript('sample_v2/sample/SConscript', exports={'env': env.Clone(), 'bin_dir': bin_dir, 'common_lib': common_lib})
 
 print("Simplified SConstruct configuration completed.")
 

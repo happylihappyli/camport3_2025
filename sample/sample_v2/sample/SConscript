@@ -104,11 +104,12 @@ for sample in ALL_CPP_API_SAMPLES:
             # 创建示例程序，指定输出到bin目录
             # 添加必要的库依赖
             env.Append(LIBS=['tycam'])
-            program = env.Program(target=target_path, source=sample_sources, LIBS=['tycam', common_lib])
+            # 不使用显式LIBS参数，而是使用环境中已配置的LIBS
+            program = env.Program(target=target_path, source=sample_sources)
             
-            # 修复依赖引用 - 使用#表示从根目录开始查找cpp_api_lib
+            # 修复依赖引用 - 只添加tycam库，因为cpp_api_lib不存在
             # 不使用显式依赖，只通过链接库实现
-            required_libs = ['cpp_api_lib', 'tycam']
+            required_libs = ['tycam']
             for lib in required_libs:
                 if lib not in env['LIBS']:
                     env.Append(LIBS=[lib])

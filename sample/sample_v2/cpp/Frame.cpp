@@ -4,6 +4,10 @@
 #include "TYImageProc.h"
 #include <time.h>
 
+#ifdef OPENCV_DEPENDENCIES
+#include <opencv2/opencv.hpp>
+#endif
+
 namespace percipio_layer {
 
 
