@@ -69,6 +69,16 @@ TY_STATUS P3DCamera::Init()
     TY_STATUS status;
     std::cout << "开始相机初始化..." << std::endl;
     
+    // 设置深度相机分辨率为1280*960
+    std::cout << "设置深度相机分辨率为1280*960" << std::endl;
+    TY_IMAGE_MODE depth_mode = TYImageMode2(TY_PIXEL_FORMAT_DEPTH16, 1280, 960);
+    status = TYSetEnum(handle(), TY_COMPONENT_DEPTH_CAM, TY_ENUM_IMAGE_MODE, depth_mode);
+    if(status != TY_STATUS_OK) {
+        std::cerr << "深度相机分辨率设置失败，状态码: " << status << std::endl;
+        return status;
+    }
+    std::cout << "深度相机分辨率设置成功" << std::endl;
+    
     status = stream_enable(stream_depth);
     if(status != TY_STATUS_OK) {
         std::cerr << "深度流使能失败，状态码: " << status << std::endl;
@@ -77,6 +87,16 @@ TY_STATUS P3DCamera::Init()
     std::cout << "深度流使能成功" << std::endl;
     
     if(has_stream(stream_color)) { 
+        // 设置RGB相机分辨率为1280*960
+        std::cout << "设置RGB相机分辨率为1280*960" << std::endl;
+        TY_IMAGE_MODE color_mode = TYImageMode2(TY_PIXEL_FORMAT_RGB, 1280, 960);
+        status = TYSetEnum(handle(), TY_COMPONENT_RGB_CAM, TY_ENUM_IMAGE_MODE, color_mode);
+        if(status != TY_STATUS_OK) {
+            std::cerr << "RGB相机分辨率设置失败，状态码: " << status << std::endl;
+            return status;
+        }
+        std::cout << "RGB相机分辨率设置成功" << std::endl;
+        
         status = stream_enable(stream_color);
         if(status != TY_STATUS_OK) {
             std::cerr << "颜色流使能失败，状态码: " << status << std::endl;
