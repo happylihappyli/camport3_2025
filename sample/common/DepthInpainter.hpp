@@ -1,12 +1,8 @@
 #ifndef XYZ_INPAINTER_HPP_
 #define XYZ_INPAINTER_HPP_
 
-#ifdef OPENCV_DEPENDENCIES
-
-#include <opencv2/opencv.hpp>
+#include "funny_Mat.hpp"
 #include "ImageSpeckleFilter.hpp"
-
-//#warn("DepthInpainter this design no longer supported by new opencv version, using opencv inpaint api for alternative")
 
 
 class DepthInpainter
@@ -26,11 +22,10 @@ public:
     {
     }
 
-    void inpaint(const cv::Mat& inputDepth, cv::Mat& out, const cv::Mat& mask);
+    void inpaint(const funny_Mat& inputDepth, funny_Mat& out, const funny_Mat& mask);
 
 private:
-    cv::Mat genValidMask(const cv::Mat& depth);
+    funny_Mat genValidMask(const funny_Mat& depth);
 };
 
-#endif
 #endif

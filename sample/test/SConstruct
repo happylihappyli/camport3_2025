@@ -1,0 +1,26 @@
+# 简单的SConstruct文件，用于测试funny_Mat类
+
+# 设置构建环境
+import os
+import sys
+from os.path import join, abspath
+
+# 创建构建环境
+env = Environment()
+
+# 设置头文件路径
+sample_common_path = abspath('../common')
+include_path = abspath('../../include')
+
+# 添加头文件搜索路径
+env.Append(CPPPATH=[sample_common_path, include_path])
+
+# 添加编译选项
+if sys.platform == 'win32':
+    env.Append(CPPDEFINES=['WIN32'])
+    env.Append(CXXFLAGS=['/EHsc'])
+
+# 创建测试程序
+env.Program('test_funny_mat', 'test_funny_mat_simple.cpp')
+env.Program('hello', 'hello.cpp')
+env.Program('simple_mat', 'simple_mat.cpp')

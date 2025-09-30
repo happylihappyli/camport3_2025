@@ -1,16 +1,13 @@
 #ifndef PERCIPIO_SAMPLE_COMMON_DEPTH_RENDER_HPP_
 #define PERCIPIO_SAMPLE_COMMON_DEPTH_RENDER_HPP_
 
-#ifdef OPENCV_DEPENDENCIES
-#include <opencv2/opencv.hpp>
-#ifndef CV_VERSION_EPOCH
-#if defined (CV_MAJOR_VERSION) && (CV_VERSION_MAJOR == 4)
-#include <opencv2/imgproc/types_c.h>
-#include <opencv2/imgcodecs/legacy/constants_c.h>
-#endif
-#endif
+#include "funny_Mat.hpp"
 #include <map>
 #include <vector>
+#include <cassert>
+
+// 定义ushort类型
+typedef unsigned short ushort;
 
 
 class DepthRender {
@@ -55,15 +52,27 @@ public:
             }
 
     /// input 16UC1 output 8UC3
-    void    Compute(const cv::Mat &src, cv::Mat& dst ){
+    void Compute(const funny_Mat &src, funny_Mat& dst ){
                 dst = Compute(src);
             }
-    cv::Mat Compute(const cv::Mat &src){
-                cv::Mat src16U;
-                if(src.type() != CV_16U){
-                    src.convertTo(src16U, CV_16U);
-                }else{
-                    src16U = src;
+    funny_Mat Compute(const funny_Mat &src){
+                funny_Mat src16U;
+                // 转换为16位无符号类型
+                if(src.type() != CV_16UC1){
+                    // TODO: 实现类型转换功能
+                    src16U.create(src.rows(), src.cols(), CV_16UC1);
+                    // 简单复制数据
+                    if (src.data()) {
+                        // 注意：这里假设数据可以直接复制，实际使用时需要根据类型进行转换
+                        // TODO: 实现完整的类型转换
+                        memcpy(src16U.data(), src.data(), src.rows() * src.cols() * sizeof(uint16_t));
+                    }
+                } else {
+                    // 复制数据
+                    src16U.create(src.rows(), src.cols(), CV_16UC1);
+                    if (src.data()) {
+                        memcpy(src16U.data(), src.data(), src.rows() * src.cols() * sizeof(uint16_t));
+                    }
                 }
 
                 if(needResetColorTable){
@@ -71,140 +80,243 @@ public:
                     needResetColorTable = false;
                 }
 
-                cv::Mat dst;
-                filtered_mask = (src16U == invalid_label);
-                clr_disp = src16U.clone();
+                funny_Mat dst;
+                // 创建掩码
+                filtered_mask.create(src16U.rows(), src16U.cols(), CV_8UC1);
+                // 创建显示图像
+                clr_disp.create(src16U.rows(), src16U.cols(), CV_16UC1);
+                
+                // 复制数据并生成掩码
+                if (src16U.data() && filtered_mask.data() && clr_disp.data()) {
+                    uint16_t* src_data = reinterpret_cast<uint16_t*>(src16U.data());
+                    uint16_t* clr_data = reinterpret_cast<uint16_t*>(clr_disp.data());
+                    uint8_t* mask_data = reinterpret_cast<uint8_t*>(filtered_mask.data());
+                    int total_pixels = src16U.rows() * src16U.cols();
+                    
+                    for (int i = 0; i < total_pixels; ++i) {
+                        clr_data[i] = src_data[i];
+                        mask_data[i] = (src_data[i] == invalid_label) ? 255 : 0;
+                    }
+                }
+
+                // 创建8位灰度图像
+                funny_Mat clr_8u;
+                clr_8u.create(src16U.rows(), src16U.cols(), CV_8UC1);
+                
                 if(COLOR_RANGE_ABS == range_mode) {
+                    // 截断值
                     TruncValue(clr_disp, filtered_mask, min_distance, max_distance);
-                    clr_disp -= min_distance;
-                    clr_disp = clr_disp * 255 / (max_distance - min_distance);
-                    clr_disp.convertTo(clr_disp, CV_8UC1);
+                    
+                    // 归一化到0-255
+                    if (clr_disp.data() && clr_8u.data()) {
+                        uint16_t* clr_data = reinterpret_cast<uint16_t*>(clr_disp.data());
+                        uint8_t* clr_8u_data = reinterpret_cast<uint8_t*>(clr_8u.data());
+                        int total_pixels = clr_disp.rows() * clr_disp.cols();
+                        
+                        for (int i = 0; i < total_pixels; ++i) {
+                            // 减去最小值
+                            if (clr_data[i] > min_distance) {
+                                clr_data[i] -= min_distance;
+                            } else {
+                                clr_data[i] = 0;
+                            }
+                            
+                            // 归一化
+                            float norm_value = static_cast<float>(clr_data[i]) / (max_distance - min_distance);
+                            clr_8u_data[i] = static_cast<uint8_t>(norm_value * 255);
+                        }
+                    }
                 } else {
                     unsigned short vmax, vmin;
                     HistAdjustRange(clr_disp, invalid_label, min_distance, vmin, vmax);
-                    clr_disp = (clr_disp - vmin) * 255 / (vmax - vmin);
-                    //clr_disp = 255 - clr_disp;
-                    clr_disp.convertTo(clr_disp, CV_8UC1);
+                    
+                    // 归一化到0-255
+                    if (clr_disp.data() && clr_8u.data()) {
+                        uint16_t* clr_data = reinterpret_cast<uint16_t*>(clr_disp.data());
+                        uint8_t* clr_8u_data = reinterpret_cast<uint8_t*>(clr_8u.data());
+                        int total_pixels = clr_disp.rows() * clr_disp.cols();
+                        
+                        for (int i = 0; i < total_pixels; ++i) {
+                            // 减去最小值
+                            if (clr_data[i] > vmin) {
+                                clr_data[i] -= vmin;
+                            } else {
+                                clr_data[i] = 0;
+                            }
+                            
+                            // 归一化
+                            float norm_value = static_cast<float>(clr_data[i]) / (vmax - vmin);
+                            clr_8u_data[i] = static_cast<uint8_t>(norm_value * 255);
+                        }
+                    }
                 }
 
+                // 创建输出图像
+                dst.create(src16U.rows(), src16U.cols(), CV_8UC3);
+                
                 switch (color_type) {
                 case COLORTYPE_GRAY:
-                    clr_disp = 255 - clr_disp;
-                    cv::cvtColor(clr_disp, dst, cv::COLOR_GRAY2BGR);
+                    // 灰度转BGR
+                    if (clr_8u.data() && dst.data()) {
+                        uint8_t* clr_8u_data = reinterpret_cast<uint8_t*>(clr_8u.data());
+                        uint8_t* dst_data = reinterpret_cast<uint8_t*>(dst.data());
+                        int total_pixels = clr_8u.rows() * clr_8u.cols();
+                        
+                        for (int i = 0; i < total_pixels; ++i) {
+                            // 反转灰度值
+                            uint8_t gray_val = 255 - clr_8u_data[i];
+                            // 复制到BGR三个通道
+                            dst_data[i * 3] = gray_val;
+                            dst_data[i * 3 + 1] = gray_val;
+                            dst_data[i * 3 + 2] = gray_val;
+                        }
+                    }
                     break;
                 case COLORTYPE_BLUERED:
-                    //temp = 255 - clr_disp;
-                    CalcColorMap(clr_disp, dst);
-                    //cv::applyColorMap(temp, color_img, cv::COLORMAP_COOL);
+                    // 使用自定义颜色映射
+                    CalcColorMap(clr_8u, dst);
                     break;
                 case COLORTYPE_RAINBOW:
-                    //cv::cvtColor(color_img, color_img, CV_GRAY2BGR);
-                    cv::applyColorMap(clr_disp, dst, cv::COLORMAP_RAINBOW);
+                    // 注意：由于移除了OpenCV依赖，彩虹色映射功能已简化
+                    // 使用默认的灰度转彩色
+                    if (clr_8u.data() && dst.data()) {
+                        uint8_t* clr_8u_data = reinterpret_cast<uint8_t*>(clr_8u.data());
+                        uint8_t* dst_data = reinterpret_cast<uint8_t*>(dst.data());
+                        int total_pixels = clr_8u.rows() * clr_8u.cols();
+                        
+                        for (int i = 0; i < total_pixels; ++i) {
+                            // 简化的彩虹色映射
+                            uint8_t val = clr_8u_data[i];
+                            dst_data[i * 3] = val < 128 ? 0 : (val - 128) * 2;
+                            dst_data[i * 3 + 1] = val < 128 ? val * 2 : 255 - (val - 128) * 2;
+                            dst_data[i * 3 + 2] = val < 128 ? 255 - val * 2 : 0;
+                        }
+                    }
                     break;
                 }
+                
+                // 清除无效区域
                 ClearInvalidArea(dst, filtered_mask);
 
                 return dst;
             }
 
 private:
-    void CalcColorMap(const cv::Mat &src, cv::Mat &dst){
-                std::vector<cv::Scalar> &table = _color_lookup_table;
+    void CalcColorMap(const funny_Mat &src, funny_Mat &dst){
+                std::vector<funny_Scalar> &table = _color_lookup_table;
                 assert(table.size() == 256);
-                assert(!src.empty());
+                assert(src.data() && dst.data());
                 assert(src.type() == CV_8UC1);
-                dst.create(src.size(), CV_8UC3);
-                const unsigned char* sptr = src.ptr<unsigned char>();
-                unsigned char* dptr = dst.ptr<unsigned char>();
-                for (int i = src.size().area(); i != 0; i--) {
-                    cv::Scalar &v = table[*sptr];
-                    dptr[0] = (unsigned char)v.val[0];
-                    dptr[1] = (unsigned char)v.val[1];
-                    dptr[2] = (unsigned char)v.val[2];
-                    dptr += 3;
+                assert(dst.type() == CV_8UC3);
+                
+                const unsigned char* sptr = reinterpret_cast<const unsigned char*>(src.data());
+                unsigned char* dptr = reinterpret_cast<unsigned char*>(dst.data());
+                int total_pixels = src.rows() * src.cols();
+                
+                for (int i = 0; i < total_pixels; ++i) {
+                    funny_Scalar &v = table[*sptr];
+                    dptr[i * 3] = static_cast<unsigned char>(v.val[0]);
+                    dptr[i * 3 + 1] = static_cast<unsigned char>(v.val[1]);
+                    dptr[i * 3 + 2] = static_cast<unsigned char>(v.val[2]);
                     sptr += 1;
                 }
             }
     void BuildColorTable(){
                 _color_lookup_table.resize(256);
-                cv::Scalar from(50, 0, 0xff), to(50, 200, 255);
+                funny_Scalar from(50, 0, 0xff), to(50, 200, 255);
                 for (int i = 0; i < 128; i++) {
-                    float a = (float)i / 128;
-                    cv::Scalar &v = _color_lookup_table[i];
+                    float a = static_cast<float>(i) / 128;
+                    funny_Scalar &v = _color_lookup_table[i];
                     for (int j = 0; j < 3; j++) {
                         v.val[j] = from.val[j] * (1 - a) + to.val[j] * a;
                     }
                 }
                 from = to;
-                to = cv::Scalar(255, 104, 0);
+                to = funny_Scalar(255, 104, 0);
                 for (int i = 128; i < 256; i++) {
-                    float a = (float)(i - 128) / 128;
-                    cv::Scalar &v = _color_lookup_table[i];
+                    float a = static_cast<float>(i - 128) / 128;
+                    funny_Scalar &v = _color_lookup_table[i];
                     for (int j = 0; j < 3; j++) {
                         v.val[j] = from.val[j] * (1 - a) + to.val[j] * a;
                     }
                 }
             }
     //keep value in range
-    void TruncValue(cv::Mat &img, cv::Mat &mask, short min_val, short max_val){
+    void TruncValue(funny_Mat &img, funny_Mat &mask, short min_val, short max_val){
                 assert(max_val >= min_val);
-                assert(img.type() == CV_16SC1);
+                assert(img.data() && mask.data());
+                assert(img.type() == CV_16UC1);
                 assert(mask.type() == CV_8UC1);
-                short* ptr = img.ptr<short>();
-                unsigned char* mask_ptr = mask.ptr<unsigned char>();
-                for (int i = img.size().area(); i != 0; i--) {
-                  if (*ptr > max_val) {
-                    *ptr = max_val;
+                
+                uint16_t* ptr = reinterpret_cast<uint16_t*>(img.data());
+                uint8_t* mask_ptr = reinterpret_cast<uint8_t*>(mask.data());
+                int total_pixels = img.rows() * img.cols();
+                
+                for (int i = 0; i < total_pixels; ++i) {
+                  if (*reinterpret_cast<short*>(ptr) > max_val) {
+                    *ptr = static_cast<uint16_t>(max_val);
                     *mask_ptr = 0xff;
-                  } else if (*ptr < min_val) {
-                    *ptr = min_val;
+                  } else if (*reinterpret_cast<short*>(ptr) < min_val) {
+                    *ptr = static_cast<uint16_t>(min_val);
                     *mask_ptr = 0xff;
                   }
                   ptr++;
                   mask_ptr++;
                 }
             }
-    void ClearInvalidArea(cv::Mat &clr_disp, cv::Mat &filtered_mask){
+    void ClearInvalidArea(funny_Mat &clr_disp, funny_Mat &filtered_mask){
+                assert(clr_disp.data() && filtered_mask.data());
                 assert(clr_disp.type() == CV_8UC3);
                 assert(filtered_mask.type() == CV_8UC1);
-                assert(clr_disp.size().area() == filtered_mask.size().area());
-                unsigned char* filter_ptr = filtered_mask.ptr<unsigned char>();
-                unsigned char* ptr = clr_disp.ptr<unsigned char>();
-                int len = clr_disp.size().area();
-                for (int i = 0; i < len; i++) {
+                assert(clr_disp.rows() == filtered_mask.rows() && clr_disp.cols() == filtered_mask.cols());
+                
+                unsigned char* filter_ptr = reinterpret_cast<unsigned char*>(filtered_mask.data());
+                unsigned char* ptr = reinterpret_cast<unsigned char*>(clr_disp.data());
+                int total_pixels = clr_disp.rows() * clr_disp.cols();
+                
+                for (int i = 0; i < total_pixels; ++i) {
                     if (*filter_ptr != 0) {
-                      ptr[0] = ptr[1] = ptr[2] = 0;
+                      ptr[i * 3] = 0;
+                      ptr[i * 3 + 1] = 0;
+                      ptr[i * 3 + 2] = 0;
                     }
                     filter_ptr++;
-                    ptr += 3;
                 }
             }
-    void HistAdjustRange(const cv::Mat &dist, ushort invalid, int min_display_distance_range
+    void HistAdjustRange(const funny_Mat &dist, ushort invalid, int min_display_distance_range
             , ushort &min_val, ushort &max_val) {
                 std::map<ushort, int> hist;
-                int sz = dist.size().area();
-                const ushort* ptr = dist.ptr < ushort>();
-                int total_num = 0;
-                for (int idx = sz; idx != 0; idx--, ptr++) {
-                    if (invalid == *ptr) {
-                        continue;
-                    }
-                    total_num++;
-                    if (hist.find(*ptr) != hist.end()) {
-                        hist[*ptr]++;
-                    } else {
-                        hist.insert(std::make_pair(*ptr, 1));
+                int total_pixels = dist.rows() * dist.cols();
+                const ushort* ptr = reinterpret_cast<const ushort*>(dist.data());
+                int count = 0;
+                
+                if (ptr) {
+                    for (int i = 0; i < total_pixels; ++i) {
+                        if (invalid == *ptr) {
+                            ptr++;
+                            continue;
+                        }
+                        count++;
+                        if (hist.find(*ptr) != hist.end()) {
+                            hist[*ptr]++;
+                        } else {
+                            hist.insert(std::make_pair(*ptr, 1));
+                        }
+                        ptr++;
                     }
                 }
+                
                 if (hist.empty()) {
                     min_val = 0;
                     max_val = 2000;
                     return;
                 }
-                const int delta = total_num * 0.01;
+                
+                const int delta = count * 0.01;
                 int sum = 0;
                 min_val = hist.begin()->first;
-                for (std::map<ushort, int>::iterator it = hist.begin(); it != hist.end();it++){
+                
+                for (std::map<ushort, int>::iterator it = hist.begin(); it != hist.end(); it++){
                     sum += it->second;
                     if (sum > delta) {
                         min_val = it->first;
@@ -214,8 +326,8 @@ private:
 
                 sum = 0;
                 max_val = hist.rbegin()->first;
-                for (std::map<ushort, int>::reverse_iterator s = hist.rbegin()
-                        ; s != hist.rend(); s++) {
+                
+                for (std::map<ushort, int>::reverse_iterator s = hist.rbegin(); s != hist.rend(); s++) {
                     sum += s->second;
                     if (sum > delta) {
                         max_val = s->first;
@@ -226,8 +338,8 @@ private:
                 const int min_display_dist = min_display_distance_range;
                 if (max_val - min_val < min_display_dist) {
                     int m = (max_val + min_val) / 2;
-                    max_val = m + min_display_dist / 2;
-                    min_val = m - min_display_dist / 2;
+                    max_val = static_cast<ushort>(m + min_display_dist / 2);
+                    min_val = static_cast<ushort>(m - min_display_dist / 2);
                     if (min_val < 0) {
                         min_val = 0;
                     }
@@ -240,10 +352,9 @@ private:
     int             min_distance;
     int             max_distance;
     uint16_t        invalid_label;
-    cv::Mat         clr_disp ;
-    cv::Mat         filtered_mask;
-    std::vector<cv::Scalar> _color_lookup_table;
+    funny_Mat       clr_disp;
+    funny_Mat       filtered_mask;
+    std::vector<funny_Scalar> _color_lookup_table;
 };
 
-#endif
 #endif

@@ -6,8 +6,6 @@
 #ifdef WIN32
 #include <stdint.h>
 #endif
-
-#ifdef OPENCV_DEPENDENCIES
 struct Point2s {
   Point2s(short _x, short _y) {
     x = _x;
@@ -17,8 +15,9 @@ struct Point2s {
 };
 
 template <typename T>
-void filterSpecklesImpl(cv::Mat& img, int newVal, int maxSpeckleSize, int maxDiff, std::vector<char> &_buf) {
-  int width = img.cols, height = img.rows;
+void filterSpecklesImpl(funny_Mat& img, int newVal, int maxSpeckleSize, int maxDiff, std::vector<char> &_buf) {
+  int width = img.cols();
+  int height = img.rows();
   int npixels = width * height;//number of pixels
   size_t bufSize = npixels * (int)(sizeof(Point2s) + sizeof(int) + sizeof(uint8_t));//all pixel buffer
   if (_buf.size() < bufSize) {
@@ -26,7 +25,7 @@ void filterSpecklesImpl(cv::Mat& img, int newVal, int maxSpeckleSize, int maxDif
   }
 
   uint8_t* buf = (uint8_t*)(&_buf[0]);
-  int i, j, dstep = img.cols;//(int)(img.step / sizeof(T));
+  int i, j, dstep = img.cols();//(int)(img.step / sizeof(T));
   int* labels = (int*)buf;
   buf += npixels * sizeof(labels[0]);
   Point2s* wbuf = (Point2s*)buf;
@@ -38,7 +37,8 @@ void filterSpecklesImpl(cv::Mat& img, int newVal, int maxSpeckleSize, int maxDif
   memset(labels, 0, npixels * sizeof(labels[0]));
 
   for (i = 0; i < height; i++) {
-    T* ds = img.ptr<T>(i);
+    // 注意：这里使用data()方法获取数据指针，并计算行偏移
+    T* ds = (T*)(img.data() + i * img.cols() * sizeof(T));
     int* ls = labels + width * i;//label ptr for a row
 
     for (j = 0; j < width; j++) {
@@ -59,7 +59,8 @@ void filterSpecklesImpl(cv::Mat& img, int newVal, int maxSpeckleSize, int maxDif
           while (ws >= wbuf) { // wavefront not empty
             count++;
             // put neighbors onto wavefront
-            T* dpp = &img.ptr<T>(p.y)[p.x];
+            // 注意：这里使用data()方法获取数据指针，并计算位置偏移
+            T* dpp = (T*)(img.data() + p.y * img.cols() * sizeof(T) + p.x * sizeof(T));
             T dp = *dpp;
             int* lpp = labels + width * p.y + p.x;
 
@@ -73,12 +74,12 @@ void filterSpecklesImpl(cv::Mat& img, int newVal, int maxSpeckleSize, int maxDif
               *ws++ = Point2s(p.x - 1, p.y);
             }
 
-            if (p.y < height - 1 && !lpp[+width] && dpp[+dstep] != newVal && std::abs(dp - dpp[+dstep]) <= maxDiff) {
+            if (p.y < height - 1 && !lpp[+width] && ((T*)(img.data() + (p.y + 1) * img.cols() * sizeof(T)))[p.x] != newVal && std::abs((int)(dp - ((T*)(img.data() + (p.y + 1) * img.cols() * sizeof(T)))[p.x])) <= maxDiff) {
               lpp[+width] = curlabel;
               *ws++ = Point2s(p.x, p.y + 1);
             }
 
-            if (p.y > 0 && !lpp[-width] && dpp[-dstep] != newVal && std::abs(dp - dpp[-dstep]) <= maxDiff) {
+            if (p.y > 0 && !lpp[-width] && ((T*)(img.data() + (p.y - 1) * img.cols() * sizeof(T)))[p.x] != newVal && std::abs((int)(dp - ((T*)(img.data() + (p.y - 1) * img.cols() * sizeof(T)))[p.x])) <= maxDiff) {
               lpp[-width] = curlabel;
               *ws++ = Point2s(p.x, p.y - 1);
             }
@@ -104,11 +105,11 @@ void filterSpecklesImpl(cv::Mat& img, int newVal, int maxSpeckleSize, int maxDif
 
 ImageSpeckleFilter gSpeckleFilter;
 
-void ImageSpeckleFilter::Compute(cv::Mat &image, int newVal, int maxSpeckleSize, int maxDiff)
+void ImageSpeckleFilter::Compute(funny_Mat &image, int newVal, int maxSpeckleSize, int maxDiff)
 {
-    if(image.type() == CV_8U){
+    if(image.type() == CV_8UC1){
         filterSpecklesImpl<uint8_t>(image, newVal, maxSpeckleSize, maxDiff, _labelBuf);
-    } else if(image.type() == CV_16U){
+    } else if(image.type() == CV_16U || image.type() == CV_16UC1){
         filterSpecklesImpl<uint16_t>(image, newVal, maxSpeckleSize, maxDiff, _labelBuf);
     } else {
         char sz[10];
@@ -116,5 +117,3 @@ void ImageSpeckleFilter::Compute(cv::Mat &image, int newVal, int maxSpeckleSize,
         throw std::runtime_error(std::string("ImageSpeckleFilter only support 8u and 16u, not ") + sz);
     }
 }
-
-#endif

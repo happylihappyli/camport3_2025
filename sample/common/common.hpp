@@ -1,21 +1,23 @@
-#ifndef SAMPLE_COMMON_COMMON_HPP_
+﻿#ifndef SAMPLE_COMMON_COMMON_HPP_
 #define SAMPLE_COMMON_COMMON_HPP_
 
+// 首先定义ushort类型，确保它在任何地方使用前都已定义
+typedef unsigned short ushort;
+
+// 然后包含funny_Mat.hpp，确保它在任何使用funny_Mat类型的代码之前被包含
+#include "funny_Mat.hpp"
+
+// 包含图像转换函数的实现
+#include "ImageConvert.hpp"
+
+// 然后包含其他头文件
 #include "Utils.hpp"
 
 #include <fstream>
 #include <iterator>
-
 #include <memory>
 #include <iostream>
 #include <typeinfo>
-
-#ifdef OPENCV_DEPENDENCIES
-#include <opencv2/opencv.hpp>
-#include "DepthRender.hpp"
-#include "MatViewer.hpp"
-#include "DepthInpainter.hpp"
-#endif
 
 #include "TYThread.hpp"
 #include "TyIsp.h"
@@ -72,165 +74,127 @@ static inline int decodeCsiRaw14(unsigned char* src, unsigned short* dst, int wi
     return 0;
 }
 
-#ifdef OPENCV_DEPENDENCIES
-static inline int parseCsiRaw10(unsigned char* src, cv::Mat &dst, int width, int height)
+static inline int parseCsiRaw10(unsigned char* src, funny_Mat &dst, int width, int height)
 {
-    cv::Mat m(height, width, CV_16U);
-    decodeCsiRaw10(src, (ushort*)m.data, width, height);
+    funny_Mat m(height, width, CV_16U);
+    decodeCsiRaw10(src, reinterpret_cast<ushort*>(m.data()), width, height);
     //convert valid 10bit from lsb to msb, d = s * 64
     dst = m * 64;
     return 0;
 }
 
-static inline int parseCsiRaw12(unsigned char* src, cv::Mat &dst, int width, int height)
+static inline int parseCsiRaw12(unsigned char* src, funny_Mat &dst, int width, int height)
 {
-    cv::Mat m(height, width, CV_16U);
-    decodeCsiRaw12(src, (ushort*)m.data, width, height);
+    funny_Mat m(height, width, CV_16U);
+    decodeCsiRaw12(src, reinterpret_cast<ushort*>(m.data()), width, height);
     //convert valid 12bit from lsb to msb, d = s * 16
     dst = m * 16;
     return 0;
 }
 
-static inline int parseIrFrame(const TY_IMAGE_DATA* img, cv::Mat* pIR)
+static inline int parseIrFrame(const TY_IMAGE_DATA* img, funny_Mat* pIR)
 {
   if (img->pixelFormat == TY_PIXEL_FORMAT_MONO16 || img->pixelFormat==TY_PIXEL_FORMAT_TOF_IR_MONO16){
-    *pIR = cv::Mat(img->height, img->width, CV_16U, img->buffer).clone();
+    *pIR = funny_Mat(img->height, img->width, CV_16U, img->buffer);
+    *pIR = (*pIR).clone();
   } else if(img->pixelFormat == TY_PIXEL_FORMAT_CSI_MONO10) {
-    *pIR = cv::Mat(img->height, img->width, CV_16U);
-    parseCsiRaw10((uchar*)img->buffer, (*pIR), img->width, img->height);
+    *pIR = funny_Mat(img->height, img->width, CV_16U);
+    parseCsiRaw10((uint8_t*)img->buffer, (*pIR), img->width, img->height);
   } else if(img->pixelFormat == TY_PIXEL_FORMAT_MONO) {
-    *pIR = cv::Mat(img->height, img->width, CV_8U, img->buffer).clone();
+    *pIR = funny_Mat(img->height, img->width, CV_8UC1, img->buffer);
+    *pIR = (*pIR).clone();
   } else if(img->pixelFormat == TY_PIXEL_FORMAT_CSI_MONO12) {
-    *pIR = cv::Mat(img->height, img->width, CV_8U, img->buffer).clone();
-    parseCsiRaw12((uchar*)img->buffer, (*pIR), img->width, img->height);
-  } 
+    *pIR = funny_Mat(img->height, img->width, CV_8UC1, img->buffer).clone();
+    parseCsiRaw12((uint8_t*)img->buffer, (*pIR), img->width, img->height);
+  }
   else {
-	  return -1;
+	return -1;
   }
 
   return 0;
 }
 
-static inline int parseBayer8Frame(const TY_IMAGE_DATA* img, cv::Mat* pColor, TY_ISP_HANDLE color_isp_handle = NULL)
+static inline int parseBayer8Frame(const TY_IMAGE_DATA* img, funny_Mat* pColor, TY_ISP_HANDLE color_isp_handle = NULL)
 {
-  int code = cv::COLOR_BayerGB2BGR;
-  switch (img->pixelFormat)
-  {
-  case TY_PIXEL_FORMAT_BAYER8GBRG:
-    code = cv::COLOR_BayerGR2BGR;
-    break;
-  case TY_PIXEL_FORMAT_BAYER8BGGR:
-    code = cv::COLOR_BayerRG2BGR;
-    break;                
-  case TY_PIXEL_FORMAT_BAYER8GRBG:
-    code = cv::COLOR_BayerGB2BGR;
-    break;                
-  case TY_PIXEL_FORMAT_BAYER8RGGB:
-    code = cv::COLOR_BayerBG2BGR;
-    break;
-  default:
-    LOGE("Invalid bayer8 fmt!");
-    return -1;
-  }
-
+  // 注意：由于我们移除了OpenCV依赖，这里简化了实现
+  // 实际项目中可能需要使用自定义的Bayer转换函数
+  
   if (!color_isp_handle){
-    cv::Mat raw(img->height, img->width, CV_8U, img->buffer);
-    cv::cvtColor(raw, *pColor, code);
+    // 不使用ISP处理时，创建一个空的RGB图像
+    *pColor = funny_Mat(img->height, img->width, CV_8UC3);
+    // 注意：这里应该添加实际的Bayer转换逻辑
+    std::cout << "警告: parseBayer8Frame中Bayer转换功能需要自定义实现" << std::endl;
   }
   else{
-    cv::Mat raw(img->height, img->width, CV_8U, img->buffer);
-    pColor->create(img->height, img->width, CV_8UC3);
-    int sz = img->height* img->width * 3;
-    TY_IMAGE_DATA out_buff = TYInitImageData(sz, pColor->data, img->width, img->height);
+    // 创建一个新的funny_Mat对象而不是使用placement new
+    funny_Mat temp(img->height, img->width, CV_8UC3);
+    size_t sz = static_cast<size_t>(img->height) * static_cast<size_t>(img->width) * 3;
+    TY_IMAGE_DATA out_buff = TYInitImageData(sz, static_cast<void*>(temp.data()), static_cast<size_t>(img->width), static_cast<size_t>(img->height));
     out_buff.pixelFormat = TY_PIXEL_FORMAT_BGR;
     int res = TYISPProcessImage(color_isp_handle, img, &out_buff);
     if (res != TY_STATUS_OK){
-      //fall back to  using opencv api
-      cv::Mat raw(img->height, img->width, CV_8U, img->buffer);
-      cv::cvtColor(raw, *pColor, code);
+      std::cout << "警告: TYISPProcessImage失败，使用空图像代替" << std::endl;
     }
+    // 使用赋值操作符将数据复制到目标对象
+    *pColor = temp;
   }
   return 0;
 }
 
-static inline int parseBayer10Frame(const TY_IMAGE_DATA* img, cv::Mat* pColor)
+static inline int parseBayer10Frame(const TY_IMAGE_DATA* img, funny_Mat* pColor)
 {
-  int code = cv::COLOR_BayerGB2BGR;
-  switch (img->pixelFormat)
-  {
-  case TY_PIXEL_FORMAT_CSI_BAYER10GBRG:
-    code = cv::COLOR_BayerGR2BGR;
-    break;
-  case TY_PIXEL_FORMAT_CSI_BAYER10BGGR:
-    code = cv::COLOR_BayerRG2BGR;
-    break;                
-  case TY_PIXEL_FORMAT_CSI_BAYER10GRBG:
-    code = cv::COLOR_BayerGB2BGR;
-    break;                
-  case TY_PIXEL_FORMAT_CSI_BAYER10RGGB:
-    code = cv::COLOR_BayerBG2BGR;
-    break;
-  default:
-    LOGE("Invalid bayer10 fmt!");
-    return -1;
-  }
-  cv::Mat raw16(img->height, img->width, CV_16U);
-  parseCsiRaw10((uchar*)img->buffer, raw16, img->width, img->height);
-  cv::cvtColor(raw16, *pColor, code);
+  // 注意：由于我们移除了OpenCV依赖，这里简化了实现
+  funny_Mat raw16(img->height, img->width, CV_16U);
+  parseCsiRaw10(reinterpret_cast<uint8_t*>(img->buffer), raw16, img->width, img->height);
+  
+  // 创建RGB图像
+  *pColor = funny_Mat(img->height, img->width, CV_8UC3);
+  
+  // 注意：这里应该添加实际的Bayer转换逻辑
+  std::cout << "警告: parseBayer10Frame中Bayer转换功能需要自定义实现" << std::endl;
   
   return 0;
 }
 
-static inline int parseBayer12Frame(const TY_IMAGE_DATA* img, cv::Mat* pColor)
+static inline int parseBayer12Frame(const TY_IMAGE_DATA* img, funny_Mat* pColor)
 {
-  int code = cv::COLOR_BayerGB2BGR;
-  switch (img->pixelFormat)
-  {
-  case TY_PIXEL_FORMAT_CSI_BAYER12GBRG:
-    code = cv::COLOR_BayerGR2BGR;
-    break;
-  case TY_PIXEL_FORMAT_CSI_BAYER12BGGR:
-    code = cv::COLOR_BayerRG2BGR;
-    break;                
-  case TY_PIXEL_FORMAT_CSI_BAYER12GRBG:
-    code = cv::COLOR_BayerGB2BGR;
-    break;                
-  case TY_PIXEL_FORMAT_CSI_BAYER12RGGB:
-    code = cv::COLOR_BayerBG2BGR;
-    break;
-  default:
-    LOGE("Invalid bayer12 fmt!");
-    return -1;
-  }
-  cv::Mat raw16(img->height, img->width, CV_16U);
-  parseCsiRaw12((uchar*)img->buffer, raw16, img->width, img->height);
-  cv::cvtColor(raw16, *pColor, code);
-
+  // 注意：由于我们移除了OpenCV依赖，这里简化了实现
+  funny_Mat raw16(img->height, img->width, CV_16U);
+  parseCsiRaw12(reinterpret_cast<uint8_t*>(img->buffer), raw16, img->width, img->height);
+  
+  // 创建RGB图像
+  *pColor = funny_Mat(img->height, img->width, CV_8UC3);
+  
+  // 注意：这里应该添加实际的Bayer转换逻辑
+  std::cout << "警告: parseBayer12Frame中Bayer转换功能需要自定义实现" << std::endl;
+  
   return 0;
 }
 
-static inline int parseColorFrame(const TY_IMAGE_DATA* img, cv::Mat* pColor, TY_ISP_HANDLE color_isp_handle = NULL)
+static inline int parseColorFrame(const TY_IMAGE_DATA* img, funny_Mat* pColor, TY_ISP_HANDLE color_isp_handle = NULL)
 {
   int ret = 0;
   if (img->pixelFormat == TY_PIXEL_FORMAT_JPEG){
-    std::vector<uchar> _v((uchar*)img->buffer, (uchar*)img->buffer + img->size);
-    *pColor = cv::imdecode(_v, cv::IMREAD_COLOR);
-    ASSERT(img->width == pColor->cols && img->height == pColor->rows);
+    std::vector<uint8_t> _v((uint8_t*)img->buffer, (uint8_t*)img->buffer + img->size);
+    bool decode_success = imdecode(_v, 0, *pColor);
+    ASSERT(decode_success && img->width == pColor->cols() && img->height == pColor->rows());
   }
   else if (img->pixelFormat == TY_PIXEL_FORMAT_YVYU){
-    cv::Mat yuv(img->height, img->width, CV_8UC2, img->buffer);
-    cv::cvtColor(yuv, *pColor, cv::COLOR_YUV2BGR_YVYU);
+    funny_Mat yuv(img->height, img->width, CV_8UC2, img->buffer);
+    cvtColor(yuv, *pColor, COLOR_YUV2BGR_YVYU);
   }
   else if (img->pixelFormat == TY_PIXEL_FORMAT_YUYV){
-    cv::Mat yuv(img->height, img->width, CV_8UC2, img->buffer);
-    cv::cvtColor(yuv, *pColor, cv::COLOR_YUV2BGR_YUYV);
+    funny_Mat yuv(img->height, img->width, CV_8UC2, img->buffer);
+    cvtColor(yuv, *pColor, COLOR_YUV2BGR_YUYV);
   }
   else if (img->pixelFormat == TY_PIXEL_FORMAT_RGB){
-    cv::Mat rgb(img->height, img->width, CV_8UC3, img->buffer);
-    cv::cvtColor(rgb, *pColor, cv::COLOR_RGB2BGR);
+    funny_Mat rgb(img->height, img->width, CV_8UC3, img->buffer);
+    // 注意：RGB到BGR的转换需要自定义实现
+    *pColor = rgb.clone();
+    std::cout << "警告: parseColorFrame中RGB到BGR转换功能需要自定义实现" << std::endl;
   }
   else if (img->pixelFormat == TY_PIXEL_FORMAT_BGR){
-    *pColor = cv::Mat(img->height, img->width, CV_8UC3, img->buffer).clone();
+    *pColor = funny_Mat(img->height, img->width, CV_8UC3, img->buffer).clone();
   }
   else if (img->pixelFormat == TY_PIXEL_FORMAT_BAYER8GBRG || 
            img->pixelFormat == TY_PIXEL_FORMAT_BAYER8BGGR || 
@@ -254,40 +218,49 @@ static inline int parseColorFrame(const TY_IMAGE_DATA* img, cv::Mat* pColor, TY_
     ret = parseBayer12Frame(img, pColor);
   }
   else if (img->pixelFormat == TY_PIXEL_FORMAT_MONO){
-    cv::Mat gray(img->height, img->width, CV_8U, img->buffer);
-    cv::cvtColor(gray, *pColor, cv::COLOR_GRAY2BGR);
+    // 灰度图转彩色图
+    *pColor = funny_Mat(img->height, img->width, CV_8UC3);
+    uint8_t* gray_data = (uint8_t*)img->buffer;
+    uint8_t* color_data = pColor->data();
+    for (int i = 0; i < img->height * img->width; i++) {
+      color_data[i*3] = gray_data[i];     // B
+      color_data[i*3 + 1] = gray_data[i]; // G
+      color_data[i*3 + 2] = gray_data[i]; // R
+    }
   }
   else if (img->pixelFormat == TY_PIXEL_FORMAT_CSI_MONO10){
-    cv::Mat gray16(img->height, img->width, CV_16U);
-    parseCsiRaw10((uchar*)img->buffer, gray16, img->width, img->height);
+    funny_Mat gray16(img->height, img->width, CV_16U);
+    parseCsiRaw10((uint8_t*)img->buffer, gray16, img->width, img->height);
     *pColor = gray16.clone();
   }
 
   return ret;
 }
 
-static inline int parseImage(const TY_IMAGE_DATA* img, cv::Mat* image, TY_ISP_HANDLE color_isp_handle = NULL)
+static inline int parseImage(const TY_IMAGE_DATA* img, funny_Mat* image, TY_ISP_HANDLE color_isp_handle = NULL)
 {
   int ret = 0;
   if (img->pixelFormat == TY_PIXEL_FORMAT_JPEG){
-    std::vector<uchar> _v((uchar*)img->buffer, (uchar*)img->buffer + img->size);
-    *image = cv::imdecode(_v, cv::IMREAD_COLOR);
-    ASSERT(img->width == image->cols && img->height == image->rows);
+    std::vector<uint8_t> _v((uint8_t*)img->buffer, (uint8_t*)img->buffer + img->size);
+    bool decode_success = imdecode(_v, 0, *image);
+    ASSERT(decode_success && img->width == image->cols() && img->height == image->rows());
   }
   else if (img->pixelFormat == TY_PIXEL_FORMAT_YVYU){
-    cv::Mat yuv(img->height, img->width, CV_8UC2, img->buffer);
-    cv::cvtColor(yuv, *image, cv::COLOR_YUV2BGR_YVYU);
+    funny_Mat yuv(img->height, img->width, CV_8UC2, img->buffer);
+    cvtColor(yuv, *image, COLOR_YUV2BGR_YVYU);
   }
   else if (img->pixelFormat == TY_PIXEL_FORMAT_YUYV){
-    cv::Mat yuv(img->height, img->width, CV_8UC2, img->buffer);
-    cv::cvtColor(yuv, *image, cv::COLOR_YUV2BGR_YUYV);
+    funny_Mat yuv(img->height, img->width, CV_8UC2, img->buffer);
+    cvtColor(yuv, *image, COLOR_YUV2BGR_YUYV);
   }
   else if (img->pixelFormat == TY_PIXEL_FORMAT_RGB){
-    cv::Mat rgb(img->height, img->width, CV_8UC3, img->buffer);
-    cv::cvtColor(rgb, *image, cv::COLOR_RGB2BGR);
+    funny_Mat rgb(img->height, img->width, CV_8UC3, img->buffer);
+    // 注意：RGB到BGR的转换需要自定义实现
+    *image = rgb.clone();
+    std::cout << "警告: parseImage中RGB到BGR转换功能需要自定义实现" << std::endl;
   }
   else if (img->pixelFormat == TY_PIXEL_FORMAT_BGR){
-    *image = cv::Mat(img->height, img->width, CV_8UC3, img->buffer).clone();
+    *image = funny_Mat(img->height, img->width, CV_8UC3, img->buffer).clone();
   }
   else if (img->pixelFormat == TY_PIXEL_FORMAT_BAYER8GBRG || 
            img->pixelFormat == TY_PIXEL_FORMAT_BAYER8BGGR || 
@@ -311,31 +284,31 @@ static inline int parseImage(const TY_IMAGE_DATA* img, cv::Mat* image, TY_ISP_HA
     ret = parseBayer12Frame(img, image);
   }
   else if(img->pixelFormat == TY_PIXEL_FORMAT_MONO) {
-    *image = cv::Mat(img->height, img->width, CV_8U, img->buffer).clone();
+    *image = funny_Mat(img->height, img->width, CV_8UC1, img->buffer).clone();
   }
   else if (img->pixelFormat == TY_PIXEL_FORMAT_CSI_MONO10){
-    cv::Mat gray16(img->height, img->width, CV_16U);
-    ret = parseCsiRaw10((uchar*)img->buffer, gray16, img->width, img->height);
+    funny_Mat gray16(img->height, img->width, CV_16U);
+    ret = parseCsiRaw10((uint8_t*)img->buffer, gray16, img->width, img->height);
     *image = gray16.clone();
   }
   else if(img->pixelFormat == TY_PIXEL_FORMAT_CSI_MONO12) {
-    cv::Mat gray16(img->height, img->width, CV_16U);
-    ret = parseCsiRaw12((uchar*)img->buffer, gray16, img->width, img->height);
+    funny_Mat gray16(img->height, img->width, CV_16U);
+    ret = parseCsiRaw12((uint8_t*)img->buffer, gray16, img->width, img->height);
     *image = gray16.clone();
   } 
   else if (img->pixelFormat == TY_PIXEL_FORMAT_MONO16 || img->pixelFormat==TY_PIXEL_FORMAT_TOF_IR_MONO16){
-    *image = cv::Mat(img->height, img->width, CV_16U, img->buffer).clone();
+    *image = funny_Mat(img->height, img->width, CV_16U, img->buffer).clone();
   }
   else {
-	  return -1;
+	return -1;
   }
 
   return ret;
 }
 
-static inline int parseFrame(const TY_FRAME_DATA& frame, cv::Mat* pDepth
-                             , cv::Mat* pLeftIR, cv::Mat* pRightIR
-                             , cv::Mat* pColor, TY_ISP_HANDLE color_isp_handle = NULL)
+static inline int parseFrame(const TY_FRAME_DATA& frame, funny_Mat* pDepth
+                             , funny_Mat* pLeftIR, funny_Mat* pRightIR
+                             , funny_Mat* pColor, TY_ISP_HANDLE color_isp_handle = NULL)
 {
     for (int i = 0; i < frame.validCount; i++){
         if (frame.image[i].status != TY_STATUS_OK) continue;
@@ -343,11 +316,13 @@ static inline int parseFrame(const TY_FRAME_DATA& frame, cv::Mat* pDepth
         // get depth image
         if (pDepth && frame.image[i].componentID == TY_COMPONENT_DEPTH_CAM){
                 if (frame.image[i].pixelFormat == TY_PIXEL_FORMAT_XYZ48) {
-                *pDepth = cv::Mat(frame.image[i].height, frame.image[i].width
-                          , CV_16SC3, frame.image[i].buffer).clone();
+                // 注意：XYZ48格式需要自定义实现
+                *pDepth = funny_Mat(frame.image[i].height, frame.image[i].width, CV_16U, frame.image[i].buffer);
+    *pDepth = (*pDepth).clone();
+                std::cout << "警告: parseFrame中XYZ48格式处理需要自定义实现" << std::endl;
                 }
                 else {
-                *pDepth = cv::Mat(frame.image[i].height, frame.image[i].width
+                *pDepth = funny_Mat(frame.image[i].height, frame.image[i].width
                           , CV_16U, frame.image[i].buffer).clone();
                 }
         }
@@ -372,7 +347,7 @@ enum{
     PC_FILE_FORMAT_XYZ = 0,
 };
 
-static void writePC_XYZ(const cv::Point3f* pnts, const cv::Vec3b *color, size_t n, FILE* fp)
+static void writePC_XYZ(const funny_Point3f* pnts, const funny_Vec3b *color, size_t n, FILE* fp)
 {
     if (color){
         for (size_t i = 0; i < n; i++){
@@ -390,7 +365,7 @@ static void writePC_XYZ(const cv::Point3f* pnts, const cv::Vec3b *color, size_t 
     }
 }
 
-static void writePointCloud(const cv::Point3f* pnts, const cv::Vec3b *color, size_t n, const char* file, int format)
+static void writePointCloud(const funny_Point3f* pnts, const funny_Vec3b *color, size_t n, const char* file, int format)
 {
     FILE* fp = fopen(file, "w");
     if (!fp){
@@ -410,7 +385,7 @@ static void writePointCloud(const cv::Point3f* pnts, const cv::Vec3b *color, siz
 #else
 
 
-#endif
+
 
 class CallbackWrapper
 {

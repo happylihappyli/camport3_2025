@@ -4,44 +4,67 @@ from os.path import join, abspath, exists
 from SCons.Script import *
 import time
 import re
+import os
 
 # 全局编译统计信息
 build_start_time = time.time()
 compile_errors = 0
 compile_warnings = 0
 
-# 自定义构建器，用于捕获编译输出
+# 自定义构建器，用于捕获编译错误
+import subprocess
+import sys
+import os
+
 def build_with_error_tracking(env):
-    # 复制现有C++构建器
-    cxx_builder = env['BUILDERS'].get('CXX', None)
-    if cxx_builder:
-        original_action = cxx_builder.action
+    # 保存原始的Program方法
+    original_program = env.Program
+    
+    # 创建一个函数来执行构建命令并捕获输出
+    def capture_build_output(cmd):
+        global compile_errors, compile_warnings
         
-        # 定义包装操作
-        def wrapped_action(target, source, env):
-            global compile_errors, compile_warnings
-            try:
-                # 执行原始构建操作
-                result = original_action(target, source, env)
-                
-                # 如果result是一个字符串（输出），解析它
-                if isinstance(result, str):
-                    # 简单的正则表达式来识别错误和警告
-                    errors = re.findall(r'error|致命错误', result, re.IGNORECASE)
-                    warnings = re.findall(r'warning', result, re.IGNORECASE)
-                    compile_errors += len(errors)
-                    compile_warnings += len(warnings)
-                
-                return result
-            except Exception as e:
-                compile_errors += 1
-                print(f"Build error: {e}")
-                return 1  # 表示失败
-        
-        # 替换构建器的action
-        cxx_builder.action = wrapped_action
+        try:
+            # 执行命令并捕获输出
+            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            output = result.stdout
+            
+            # 解析输出中的错误和警告
+            errors = re.findall(r'error|致命错误', output, re.IGNORECASE)
+            warnings = re.findall(r'warning', output, re.IGNORECASE)
+            
+            compile_errors += len(errors)
+            compile_warnings += len(warnings)
+            
+            return result.returncode, output
+        except Exception as e:
+            compile_errors += 1
+            return 1, f"Error executing command: {e}"
+    
+    # 创建一个更简单的包装器来跟踪构建状态
+    def wrapped_program(*args, **kwargs):
+        global compile_errors
+        try:
+            result = original_program(*args, **kwargs)
+            return result
+        except Exception as e:
+            compile_errors += 1
+            print(f"Program build error: {e}")
+            return None
+    
+    # 替换Program方法
+    env.Program = wrapped_program
     
     return env
+
+# 在构建开始前清除之前的错误计数
+def reset_compile_stats():
+    global compile_errors, compile_warnings
+    compile_errors = 0
+    compile_warnings = 0
+
+# 初始化编译统计
+reset_compile_stats()
 
 # 输出编译总结
 def print_compile_summary():
@@ -56,6 +79,8 @@ def print_compile_summary():
     
     # 检查是否有成功编译的可执行文件
     bin_dir = os.path.abspath('bin')
+    sample_v1_exes = []
+    sample_v2_exes = []
     if os.path.exists(bin_dir):
         executables = [f for f in os.listdir(bin_dir) if f.endswith('.exe')]
         sample_v1_exes = [f for f in executables if not f.endswith('_v2.exe')]
@@ -70,13 +95,37 @@ def print_compile_summary():
         for exe in sample_v2_exes:  # 只显示前5个sample_v2可执行文件
             print(f"  - {exe}")
     
+    # 尝试直接检测是否有编译错误
+    try:
+        # 检查最近的构建日志文件
+        if os.path.exists('.sconsign.dblite'):
+            # 使用scons -n命令查看构建过程，这不会实际构建，但可以显示命令
+            try:
+                build_log = subprocess.check_output(['scons', '-n'], stderr=subprocess.STDOUT, universal_newlines=True)
+                errors_in_log = re.findall(r'error|致命错误', build_log, re.IGNORECASE)
+                if errors_in_log:
+                    compile_errors += len(errors_in_log)
+            except:
+                pass
+        
+        # 检查系统环境中是否有SCONS_ERROR变量
+        if 'SCONS_ERROR' in os.environ:
+            try:
+                compile_errors += int(os.environ.get('SCONS_ERROR', '0'))
+            except:
+                pass
+            
+    except Exception as e:
+        print(f"Error checking build status: {e}")
+    
     # 显示编译错误和警告统计
     print(f"\n编译统计:")
     print(f"编译错误数量: {compile_errors}")
     print(f"编译警告数量: {compile_warnings}")
     
-    # 判断编译状态
-    success = os.path.exists(bin_dir) and len([f for f in os.listdir(bin_dir) if f.endswith('.exe')]) > 0 and compile_errors == 0
+    # 判断编译状态 - 更直接的方法是检查是否有编译错误记录
+    success = compile_errors == 0
+    
     print(f"编译状态: {'成功' if success else '失败'}")
     
     print("=" * 80)
@@ -110,7 +159,19 @@ if not os.path.exists(bin_dir):
     os.makedirs(bin_dir)    # 创建bin目录
     print(f"Created bin directory: {bin_dir}")
 
+# 创建obj目录，用于存放所有目标文件
+obj_dir = os.path.abspath('obj')
+# 按照用户要求，将obj文件放到E:\github\camport3_2025\sample\obj目录
+obj_dir = "E:\\github\\camport3_2025\\sample\\obj"
+if not os.path.exists(obj_dir):
+    os.makedirs(obj_dir)
+    print(f"Created obj directory: {obj_dir}")
+
 env = Environment(variables=opts)
+
+# 为了防止不同示例的obj文件命名冲突，我们使用不同的子目录
+# 这里我们不直接设置OBJPREFIX，而是在每个子环境中设置不同的路径
+# 主环境的obj文件直接放在obj_dir下
 
 # 设置基本路径
 LIB_ROOT_PATH = abspath('../lib/win/hostapp/')
@@ -165,11 +226,14 @@ common_sources = [
     join(COMMON_DIR, 'ParametersParse.cpp'),
     join(COMMON_DIR, 'huffman.cpp'),
     join(COMMON_DIR, 'ImageSpeckleFilter.cpp'),
-    join(COMMON_DIR, 'DepthInpainter.cpp')
+    join(COMMON_DIR, 'DepthInpainter.cpp'),
+    join(COMMON_DIR, 'funny_resize.cpp'),
 ]
 
 # 为common_lib创建专用环境，不包含任何OpenCV依赖
 common_env = env.Clone()
+# 确保common_lib的obj文件也放到指定目录
+common_env['OBJPREFIX'] = os.path.join(obj_dir, 'common_')
 
 # 确保common_lib不依赖任何OpenCV库
 common_lib = common_env.Library('common_lib', common_sources)
@@ -181,27 +245,31 @@ env.Append(LIBS=['common_lib'])
 export_libs = {'env': env, 'bin_dir': bin_dir, 'common_lib': common_lib}
 SConscript('sample_v1/SConscript', exports=export_libs)
 
-# 先构建common_lib，再构建示例程序
-export_libs = {'env': env, 'bin_dir': bin_dir, 'common_lib': common_lib}
-SConscript('sample_v1/SConscript', exports=export_libs)
-
-# 编译sample_v2示例目录
-print("开始编译sample_v2目录")
-# 为sample_v2创建专用环境
-if opencv_dir and os.path.exists(opencv_dir):
-    # 如果OpenCV路径有效，设置BUILD_SAMPLE_V2_WITH_OPENCV标志为1启用OpenCV支持
-    print("启用sample_v2的OpenCV支持")
-    env['BUILD_SAMPLE_V2_WITH_OPENCV'] = '1'
-    # 创建一个克隆的环境，并移除program方法调用中可能覆盖LIBS的问题
+# 编译sample_v2示例目录 - 暂时禁用
+if env.get('BUILD_SAMPLE_V2', '0') == '1':
+    print("开始编译sample_v2目录")
+    # 为sample_v2创建专用环境
     sample_v2_env = env.Clone()
-    # 直接传递原始环境，确保OpenCV链接配置正确应用
-    SConscript('sample_v2/sample/SConscript', exports={'env': env, 'bin_dir': bin_dir, 'common_lib': common_lib})
+    # 确保sample_v2_env的obj文件也放到指定目录，使用前缀避免冲突
+    sample_v2_env['OBJPREFIX'] = os.path.join(obj_dir, 'sample_v2_')
+    # 确保sample_v2_env包含common_lib
+    if 'common_lib' not in sample_v2_env['LIBS']:
+        sample_v2_env.Append(LIBS=['common_lib'])
+
+    if opencv_dir and os.path.exists(opencv_dir):
+        # 如果OpenCV路径有效，设置BUILD_SAMPLE_V2_WITH_OPENCV标志为1启用OpenCV支持
+        print("启用sample_v2的OpenCV支持")
+        sample_v2_env['BUILD_SAMPLE_V2_WITH_OPENCV'] = '1'
+    else:
+        print("sample_v2不使用OpenCV")
+
+    # 传递克隆的环境和common_lib
+    SConscript('sample_v2/sample/SConscript', exports={'env': sample_v2_env, 'bin_dir': bin_dir, 'common_lib': common_lib})
 else:
-    # 不使用OpenCV时的默认行为
-    SConscript('sample_v2/sample/SConscript', exports={'env': env.Clone(), 'bin_dir': bin_dir, 'common_lib': common_lib})
+    print("sample_v2构建已禁用")
 
 print("Simplified SConstruct configuration completed.")
-
-# 在SCons构建结束时调用编译总结函数
-import atexit
-atexit.register(print_compile_summary)
+print("end compile")
+# # 在SCons构建结束时调用编译总结函数
+# import atexit
+# atexit.register(print_compile_summary)

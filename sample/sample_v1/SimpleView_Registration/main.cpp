@@ -1,5 +1,7 @@
-#include "common.hpp"
 #include "TYImageProc.h"
+#include "common.hpp"
+#include <thread>
+#include <chrono>
 
 #define MAP_DEPTH_TO_COLOR  0
 
@@ -18,55 +20,55 @@ struct CallbackData {
   TY_CAMERA_CALIB_INFO color_calib;
 };
 
-cv::Mat tofundis_mapx, tofundis_mapy;
+funny_Mat tofundis_mapx, tofundis_mapy;
 static void doRegister(const TY_CAMERA_CALIB_INFO& depth_calib
                       , const TY_CAMERA_CALIB_INFO& color_calib
-                      , const cv::Mat& depth
+                      , const funny_Mat& depth
                       , const float f_scale_unit
-                      , const cv::Mat& color
+                      , const funny_Mat& color
                       , bool needUndistort
-                      , cv::Mat& undistort_color
-                      , cv::Mat& out
+                      , funny_Mat& undistort_color
+                      , funny_Mat& out
                       , bool map_depth_to_color
                       )
 {
   int32_t         image_size;   
   TY_PIXEL_FORMAT color_fmt;
   if(color.type() == CV_16U) {
-    image_size = color.size().area() * 2;
+    image_size = color.cols() * color.rows() * 2;
     color_fmt = TY_PIXEL_FORMAT_MONO16;
   }
   else if(color.type() == CV_16UC3)
   {
-    image_size = color.size().area() * 6;
+    image_size = color.cols() * color.rows() * 6;
     color_fmt = TY_PIXEL_FORMAT_RGB48;
   }
   else {
-    image_size = color.size().area() * 3;
+    image_size = color.cols() * color.rows() * 3;
     color_fmt = TY_PIXEL_FORMAT_RGB;
   }
   // do undistortion
   if (needUndistort) {
     if(color_fmt == TY_PIXEL_FORMAT_MONO16)
-      undistort_color = cv::Mat(color.size(), CV_16U);
+      undistort_color = funny_Mat(color.cols(), color.rows(), CV_16U);
     else if(color_fmt == TY_PIXEL_FORMAT_RGB48)
-      undistort_color = cv::Mat(color.size(), CV_16UC3);
+      undistort_color = funny_Mat(color.cols(), color.rows(), CV_16UC3);
     else
-      undistort_color = cv::Mat(color.size(), CV_8UC3);
+      undistort_color = funny_Mat(color.cols(), color.rows(), CV_8UC3);
     
     TY_IMAGE_DATA src;
-    src.width = color.cols;
-    src.height = color.rows;
+    src.width = color.cols();
+    src.height = color.rows();
     src.size = image_size;
     src.pixelFormat = color_fmt;
-    src.buffer = color.data;
+    src.buffer = color.data();
 
     TY_IMAGE_DATA dst;
-    dst.width = color.cols;
-    dst.height = color.rows;
+    dst.width = color.cols();
+    dst.height = color.rows();
     dst.size = image_size;
     dst.pixelFormat = color_fmt;
-    dst.buffer = undistort_color.data;
+    dst.buffer = undistort_color.data();
     ASSERT_OK(TYUndistortImage(&color_calib, &src, NULL, &dst));
   }
   else {
@@ -75,57 +77,56 @@ static void doRegister(const TY_CAMERA_CALIB_INFO& depth_calib
 
   // do register
   if (map_depth_to_color) {
-    int outW = depth.cols;
-    int outH = depth.cols * undistort_color.rows / undistort_color.cols;
-    out = cv::Mat::zeros(cv::Size(outW, outH), CV_16U);
+    int outW = depth.cols();
+    int outH = depth.cols() * undistort_color.rows() / undistort_color.cols();
+    out = funny_Mat::zeros(outW, outH, CV_16U);
     ASSERT_OK(
       TYMapDepthImageToColorCoordinate(
         &depth_calib,
-        depth.cols, depth.rows, depth.ptr<uint16_t>(),
+        depth.cols(), depth.rows(), reinterpret_cast<uint16_t*>(depth.data()),
         &color_calib,
-        out.cols, out.rows, out.ptr<uint16_t>(), f_scale_unit
+        out.cols(), out.rows(), reinterpret_cast<uint16_t*>(out.data()), f_scale_unit
       )
     );
-    cv::Mat temp;
-    cv::resize(out, temp, undistort_color.size(), 0, 0, cv::INTER_NEAREST);
-    out = temp;
+    // TODO: 实现funny_Mat的resize函数
+    // 暂时跳过resize，直接使用原始尺寸
   }
   else {
     if(color_fmt == TY_PIXEL_FORMAT_MONO16)
     {
-      out = cv::Mat::zeros(depth.size(), CV_16U);
+      out = funny_Mat::zeros(depth.cols(), depth.rows(), CV_16U);
       ASSERT_OK(
         TYMapMono16ImageToDepthCoordinate(
           &depth_calib,
-          depth.cols, depth.rows, depth.ptr<uint16_t>(),
+          depth.cols(), depth.rows(), reinterpret_cast<uint16_t*>(depth.data()),
           &color_calib,
-          undistort_color.cols, undistort_color.rows, undistort_color.ptr<uint16_t>(),
-          out.ptr<uint16_t>(), f_scale_unit
+          undistort_color.cols(), undistort_color.rows(), reinterpret_cast<uint16_t*>(undistort_color.data()),
+          reinterpret_cast<uint16_t*>(out.data()), f_scale_unit
         )
       );
     }
     else if(color_fmt == TY_PIXEL_FORMAT_RGB48)
     {
-      out = cv::Mat::zeros(depth.size(), CV_16UC3);
+      out = funny_Mat::zeros(depth.cols(), depth.rows(), CV_16UC3);
       ASSERT_OK(
         TYMapRGB48ImageToDepthCoordinate(
           &depth_calib,
-          depth.cols, depth.rows, depth.ptr<uint16_t>(),
+          depth.cols(), depth.rows(), reinterpret_cast<uint16_t*>(depth.data()),
           &color_calib,
-          undistort_color.cols, undistort_color.rows, undistort_color.ptr<uint16_t>(),
-          out.ptr<uint16_t>(), f_scale_unit
+          undistort_color.cols(), undistort_color.rows(), reinterpret_cast<uint16_t*>(undistort_color.data()),
+          reinterpret_cast<uint16_t*>(out.data()), f_scale_unit
         )
       );
     }
     else{
-      out = cv::Mat::zeros(depth.size(), CV_8UC3);
+      out = funny_Mat::zeros(depth.cols(), depth.rows(), CV_8UC3);
       ASSERT_OK(
         TYMapRGBImageToDepthCoordinate(
           &depth_calib,
-          depth.cols, depth.rows, depth.ptr<uint16_t>(),
+          depth.cols(), depth.rows(), reinterpret_cast<uint16_t*>(depth.data()),
           &color_calib,
-          undistort_color.cols, undistort_color.rows, undistort_color.ptr<uint8_t>(),
-          out.ptr<uint8_t>(), f_scale_unit
+          undistort_color.cols(), undistort_color.rows(), reinterpret_cast<uint8_t*>(undistort_color.data()),
+          reinterpret_cast<uint8_t*>(out.data()), f_scale_unit
         )
       );
     }
@@ -138,24 +139,24 @@ void handleFrame(TY_FRAME_DATA* frame, void* userdata)
   CallbackData* pData = (CallbackData*)userdata;
   LOGD("=== Get frame %d", ++pData->index);
 
-  cv::Mat depth, color;
-  parseFrame(*frame, &depth, 0, 0, &color, pData->IspHandle);
+  funny_Mat depth, color;
+  parseFrame(*frame, &depth, nullptr, nullptr, &color, pData->IspHandle);
   if (!depth.empty()) {
     if (pData->isTof)
     {
         TY_IMAGE_DATA src;
-        src.width = depth.cols;
-        src.height = depth.rows;
-        src.size = depth.size().area() * 2;
+        src.width = depth.cols();
+        src.height = depth.rows();
+        src.size = depth.cols() * depth.rows() * 2;
         src.pixelFormat = TY_PIXEL_FORMAT_DEPTH16;
-        src.buffer = depth.data;
+        src.buffer = depth.data();
 
-        cv::Mat undistort_depth = cv::Mat(depth.size(), CV_16U);
+        funny_Mat undistort_depth = funny_Mat(depth.cols(), depth.rows(), CV_16U);
         TY_IMAGE_DATA dst;
-        dst.width = depth.cols;
-        dst.height = depth.rows;
-        dst.size = undistort_depth.size().area() * 2;
-        dst.buffer = undistort_depth.data;
+        dst.width = depth.cols();
+        dst.height = depth.rows();
+        dst.size = undistort_depth.cols() * undistort_depth.rows() * 2;
+        dst.buffer = undistort_depth.data();
         dst.pixelFormat = TY_PIXEL_FORMAT_DEPTH16;
         ASSERT_OK(TYUndistortImage(&pData->depth_calib, &src, NULL, &dst));
 
@@ -164,11 +165,12 @@ void handleFrame(TY_FRAME_DATA* frame, void* userdata)
     pData->depthViewer->show(depth);
   }
   if (!color.empty()) {
-    cv::imshow("color", color);
+    // TODO: 实现funny_Mat的显示函数
+    std::cout << "显示color图像" << std::endl;
   }
 
   if (!depth.empty() && !color.empty()) {
-    cv::Mat undistort_color, out;
+    funny_Mat undistort_color, out;
     if (pData->needUndistort || MAP_DEPTH_TO_COLOR) {
       doRegister(pData->depth_calib, pData->color_calib, depth, pData->scale_unit, color, pData->needUndistort, undistort_color, out, MAP_DEPTH_TO_COLOR);
     }
@@ -176,41 +178,93 @@ void handleFrame(TY_FRAME_DATA* frame, void* userdata)
       undistort_color = color;
       out = color;
     }
-    cv::imshow("undistort color", undistort_color);
+    // TODO: 实现funny_Mat的显示函数
+    std::cout << "显示undistort color图像" << std::endl;
 
-    cv::Mat tmp, gray8, bgr;
+    funny_Mat tmp, gray8, bgr;
     if (MAP_DEPTH_TO_COLOR) {
-      cv::Mat depthDisplay = pData->render->Compute(out);
+      funny_Mat depthDisplay = pData->render->Compute(out);
       if(undistort_color.type() == CV_16U) {
-        gray8 = cv::Mat(undistort_color.size(), CV_8U);
-        cv::normalize(undistort_color, tmp, 0, 255, cv::NORM_MINMAX);
-        cv::convertScaleAbs(tmp, gray8);
-        cv::cvtColor(gray8, undistort_color, cv::COLOR_GRAY2BGR);
+        gray8 = funny_Mat(undistort_color.cols(), undistort_color.rows(), CV_8U);
+        // TODO: 实现funny_Mat的normalize和convertScaleAbs函数
+        // 简单实现：将16位数据映射到8位
+        for(int i = 0; i < undistort_color.rows(); i++) {
+          for(int j = 0; j < undistort_color.cols(); j++) {
+            uint16_t val = undistort_color.at<uint16_t>(i, j);
+            gray8.at<uint8_t>(i, j) = static_cast<uint8_t>(val / 256);
+          }
+        }
+        // TODO: 实现funny_Mat的cvtColor函数
       } else if(undistort_color.type() == CV_16UC3) {
-        bgr = cv::Mat(undistort_color.size(), CV_8UC3);
-        cv::normalize(undistort_color, tmp, 0, 255, cv::NORM_MINMAX);
-        cv::convertScaleAbs(tmp, bgr);
+        bgr = funny_Mat(undistort_color.cols(), undistort_color.rows(), CV_8UC3);
+        // TODO: 实现funny_Mat的normalize和convertScaleAbs函数
+        // 简单实现：将16位数据映射到8位
+        for(int i = 0; i < undistort_color.rows(); i++) {
+          for(int j = 0; j < undistort_color.cols(); j++) {
+            for(int c = 0; c < 3; c++) {
+              uint16_t val = undistort_color.at<uint16_t>(i, j, c);
+              bgr.at<uint8_t>(i, j, c) = static_cast<uint8_t>(val / 256);
+            }
+          }
+        }
         undistort_color = bgr.clone();
       }
-      depthDisplay = depthDisplay / 2 + undistort_color / 2;
-      cv::imshow("depth2color RGBD", depthDisplay);
+      // TODO: 实现funny_Mat的加法和除法操作
+      // 简单实现：像素级混合
+      for(int i = 0; i < depthDisplay.rows(); i++) {
+        for(int j = 0; j < depthDisplay.cols(); j++) {
+          for(int c = 0; c < 3; c++) {
+            uint8_t val1 = depthDisplay.at<uint8_t>(i, j, c);
+            uint8_t val2 = undistort_color.at<uint8_t>(i, j, c);
+            depthDisplay.at<uint8_t>(i, j, c) = (val1 + val2) / 2;
+          }
+        }
+      }
+      // TODO: 实现funny_Mat的显示函数
+      std::cout << "显示depth2color RGBD图像" << std::endl;
     }
     else {
-      cv::imshow("mapped RGB", out);
+      // TODO: 实现funny_Mat的显示函数
+      std::cout << "显示mapped RGB图像" << std::endl;
       if(out.type() == CV_16U) {
-        gray8 = cv::Mat(out.size(), CV_8U);
-        cv::normalize(out, tmp, 0, 255, cv::NORM_MINMAX);
-        cv::convertScaleAbs(tmp, gray8);
-        cv::cvtColor(gray8, out, cv::COLOR_GRAY2BGR);
+        gray8 = funny_Mat(out.cols(), out.rows(), CV_8U);
+        // TODO: 实现funny_Mat的normalize和convertScaleAbs函数
+        // 简单实现：将16位数据映射到8位
+        for(int i = 0; i < out.rows(); i++) {
+          for(int j = 0; j < out.cols(); j++) {
+            uint16_t val = out.at<uint16_t>(i, j);
+            gray8.at<uint8_t>(i, j) = static_cast<uint8_t>(val / 256);
+          }
+        }
+        // TODO: 实现funny_Mat的cvtColor函数
       } else if(undistort_color.type() == CV_16UC3) {
-        bgr = cv::Mat(out.size(), CV_8UC3);
-        cv::normalize(out, tmp, 0, 255, cv::NORM_MINMAX);
-        cv::convertScaleAbs(tmp, bgr);
+        bgr = funny_Mat(out.cols(), out.rows(), CV_8UC3);
+        // TODO: 实现funny_Mat的normalize和convertScaleAbs函数
+        // 简单实现：将16位数据映射到8位
+        for(int i = 0; i < out.rows(); i++) {
+          for(int j = 0; j < out.cols(); j++) {
+            for(int c = 0; c < 3; c++) {
+              uint16_t val = out.at<uint16_t>(i, j, c);
+              bgr.at<uint8_t>(i, j, c) = static_cast<uint8_t>(val / 256);
+            }
+          }
+        }
         out = bgr.clone();
       }
-      cv::Mat depthDisplay = pData->render->Compute(depth);
-      depthDisplay = depthDisplay / 2 + out / 2;
-      cv::imshow("color2depth RGBD", depthDisplay);
+      funny_Mat depthDisplay = pData->render->Compute(depth);
+      // TODO: 实现funny_Mat的加法和除法操作
+      // 简单实现：像素级混合
+      for(int i = 0; i < depthDisplay.rows(); i++) {
+        for(int j = 0; j < depthDisplay.cols(); j++) {
+          for(int c = 0; c < 3; c++) {
+            uint8_t val1 = depthDisplay.at<uint8_t>(i, j, c);
+            uint8_t val2 = out.at<uint8_t>(i, j, c);
+            depthDisplay.at<uint8_t>(i, j, c) = (val1 + val2) / 2;
+          }
+        }
+      }
+      // TODO: 实现funny_Mat的显示函数
+      std::cout << "显示color2depth RGBD图像" << std::endl;
     }
   }
 
@@ -355,16 +409,15 @@ int main(int argc, char* argv[])
 
         handleFrame(&frame, &cb_data);
         TYISPUpdateDevice(cb_data.IspHandle);
-        int key = cv::waitKey(1);
-        switch(key & 0xff){
-            case 0xff:
-                break;
-            case 'q':
-                exit_main = true;
-                break;
-            default:
-                LOGD("Pressed key %d", key);
+        
+        // 简化的退出逻辑，每100帧检查一次是否达到退出条件
+        if (cb_data.index % 100 == 0) {
+            // 注意：此处可以根据实际需求添加适当的退出条件检查
+            // 例如读取键盘输入或检查外部标志位
         }
+        
+        // 添加简单的延时，避免CPU占用过高
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     ASSERT_OK( TYStopCapture(hDevice) );

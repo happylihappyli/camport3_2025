@@ -1,0 +1,56 @@
+# -*- coding: utf-8 -*-
+# 简化版 SConstruct 文件，仅用于编译 MinimalTYTest.cpp
+
+import os
+import sys
+
+# 设置项目根目录
+sample_dir = os.path.dirname(os.path.abspath(__file__))
+base_dir = os.path.dirname(sample_dir)
+
+# 创建环境
+env = Environment()
+
+# 设置编译选项
+env.Append(CXXFLAGS=['/EHsc', '/TP', '/nologo', '/D_CRT_SECURE_NO_WARNINGS'])
+
+# 设置包含路径
+env.Append(CPPPATH=[os.path.join(base_dir, 'include')])
+
+# 设置链接库路径
+env.Append(LIBPATH=[os.path.join(base_dir, 'lib', 'x64')])
+
+# 设置链接库
+env.Append(LIBS=['tycam', 'ws2_32', 'user32'])
+
+# 指定源文件
+source_file = os.path.join('sample_v2', 'sample', 'PointCloud', 'MinimalTYTest.cpp')
+
+def CheckFileExists(target, source, env):
+    for s in source:
+        if not os.path.exists(str(s)):
+            print(f"Error: Source file not found: {str(s)}")
+            return False
+    return True
+
+# 创建自定义构建器，先检查文件是否存在
+env.Append(BUILDERS={'SafeProgram': Builder(
+    action=env.Action('$LINK $LINKFLAGS $SOURCES $LIBS $LINKCOMSTR', shell=True),
+    suffix='.exe',
+    src_suffix='.cpp',
+    emitter=lambda target, source, env: (target, source),
+    before_targets='CheckFiles'
+)})
+
+env.AlwaysBuild(env.Command('CheckFiles', [], env.Action(CheckFileExists)))
+
+env.Depends(env.Alias('build_minimal', 'CheckFiles'))
+
+# 构建 MinimalTYTest 程序
+if os.path.exists(source_file):
+    print(f"Building MinimalTYTest from {source_file}")
+    target_file = os.path.join('bin', 'MinimalTYTest.exe')
+    env.SafeProgram(target=target_file, source=source_file)
+    print(f"Target will be built to {target_file}")
+else:
+    print(f"Error: Source file not found: {source_file}")

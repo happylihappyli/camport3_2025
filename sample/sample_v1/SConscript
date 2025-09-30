@@ -155,7 +155,10 @@ for sample in SAMPLES_WITHOUT_OPENCV:
                 print("Including optional library: tyimgproc")
             
             # 为这个特定的示例创建一个临时环境，确保使用正确的库
+            # 使用示例名称作为前缀，避免obj文件命名冲突
             sample_env = env.Clone()
+            # 设置唯一的obj文件前缀，使用示例名称
+            sample_env['OBJPREFIX'] = os.path.join(env.get('OBJPREFIX', ''), f'{sample}_')
             sample_env.Append(LIBS=all_libs)
             print(f"Building {sample} with libraries: {all_libs}")
             

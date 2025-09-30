@@ -1,95 +1,102 @@
-#include <stdint.h>
-#include <stdio.h>
 #include "MatViewer.hpp"
+#include <cstdio>
 
-
-#ifdef OPENCV_DEPENDENCIES
+// 静态成员变量初始化
 int GraphicItem::globalID = 0;
 
+// GraphicItem类的构造函数实现
+GraphicItem::GraphicItem(const funny_Scalar& color) : _id(++globalID), _color(color) {}
 
-void OpencvViewer::_onMouseCallback(int event, int x, int y, int /*flags*/, void* ustc)
-{
-    OpencvViewer* p = (OpencvViewer*)ustc;
+// GraphicItem类的析构函数实现
+GraphicItem::~GraphicItem() {}
 
-    // NOTE: This callback will be called very frequently while mouse moving,
-    // keep it simple
+// GraphicItem类的id()方法实现
+int GraphicItem::id() const { return _id; }
 
-    bool repaint = false;
-    p->onMouseCallback(p->_orgImg, event, cv::Point(x,y), repaint);
-    if(repaint){
-        p->showImage();
+// GraphicItem类的color()方法实现
+funny_Scalar GraphicItem::color() const { return _color; }
+
+// GraphicItem类的setColor()方法实现
+void GraphicItem::setColor(const funny_Scalar& color) { _color = color; }
+
+// OpencvViewer类的构造函数实现
+OpencvViewer::OpencvViewer(const std::string& win) : _win(win) {
+    _has_win = 0;
+}
+
+// OpencvViewer类的析构函数实现
+OpencvViewer::~OpencvViewer() {
+    if (_has_win) {
+        // 注意：OpenCV窗口相关功能已移除
     }
 }
 
+// OpencvViewer类的name()方法实现
+const std::string& OpencvViewer::name() const { return _win; }
 
-void OpencvViewer::showImage()
+// OpencvViewer类的show()方法实现
+void OpencvViewer::show(const funny_Mat& img)
 {
-    _showImg = _orgImg.clone();
-    for(std::map<int, GraphicItem*>::iterator it = _items.begin()
-            ; it != _items.end(); it++){
-        it->second->draw(_showImg);
-    }
-    cv::imshow(_win.c_str(), _showImg);
-    cv::setMouseCallback(_win, _onMouseCallback, this);
+    _has_win = 1;
+    _orgImg = img.clone();
+    showImage();
 }
 
-///////////////////////////// DepthViewer ///////////////////////////////////////
-
-
-DepthViewer::DepthViewer(const std::string& win)
-    : OpencvViewer(win)
-    , _centerDepthItem(std::string(), cv::Point(0,20), 0.5, cv::Scalar(0,255,0), 2)
-    , _pickedDepthItem(std::string(), cv::Point(0,40), 0.5, cv::Scalar(0,255,0), 2)
-{
-    OpencvViewer::addGraphicItem(&_centerDepthItem);
-    OpencvViewer::addGraphicItem(&_pickedDepthItem);
-    depth_scale_unit = 1.f;
-}
-
-
-void DepthViewer::show(const cv::Mat& img)
-{
-    if(img.type() != CV_16U || img.total() == 0){
-        return;
-    }
-
-    char str[128];
-    float val = img.at<uint16_t>(img.rows / 2, img.cols / 2)*depth_scale_unit;
-    sprintf(str, "Depth at center: %.1f", val);
-    _centerDepthItem.set(str);
-
-    val = img.at<uint16_t>(_fixLoc.y, _fixLoc.x)*depth_scale_unit;
-    sprintf(str, "Depth at (%d,%d): %.1f", _fixLoc.x, _fixLoc.y , val);
-    _pickedDepthItem.set(str);
-
-    _depth = img.clone();
-    _renderedDepth = _render.Compute(img);
-    OpencvViewer::show(_renderedDepth);
-}
-
-
-void DepthViewer::onMouseCallback(cv::Mat& img, int event, const cv::Point pnt
-    , bool& repaint)
+// OpencvViewer类的onMouseCallback()方法实现
+void OpencvViewer::onMouseCallback(funny_Mat& /*img*/, int /*event*/, const funny_Point /*pnt*/, bool& repaint)
 {
     repaint = false;
-    switch(event){
-        case cv::EVENT_LBUTTONDOWN: {
-            _fixLoc = pnt;
-            char str[64];
-            float val = _depth.at<uint16_t>(pnt.y, pnt.x)*depth_scale_unit;
-            sprintf(str, "Depth at (%d,%d): %.1f", pnt.x, pnt.y, val);
-            printf(">>>>>>>>>>>>>>>> depth(%.1f)\n", val);
-            _pickedDepthItem.set(str);
-            repaint = true;
-            break;
-        }
-        case cv::EVENT_MOUSEMOVE: 
-            // uint16_t val = _img.at<uint16_t>(pnt.y, pnt.x);
-            // char str[32];
-            // sprintf(str, "Depth at mouse: %d", val);
-            // drawText(img, str, cv::Point(0,60), 0.5, cv::Scalar(0,255,0), 2);
-            break;
+}
+
+// OpencvViewer类的addGraphicItem()方法实现
+void OpencvViewer::addGraphicItem(GraphicItem* item) { _items.insert(std::make_pair(item->id(), item)); }
+
+// OpencvViewer类的delGraphicItem()方法实现
+void OpencvViewer::delGraphicItem(GraphicItem* item) { _items.erase(item->id()); }
+
+// OpencvViewer类的showImage()方法实现
+void OpencvViewer::showImage()
+{
+    // 复制原始图像到显示图像
+    _showImg = _orgImg.clone();
+    
+    // 绘制所有图形项
+    for (auto& itemPair : _items)
+    {
+        itemPair.second->draw(_showImg);
     }
 }
 
-#endif
+// DepthViewer类的构造函数实现
+DepthViewer::DepthViewer(const std::string& win) : OpencvViewer(win)
+{
+    depth_scale_unit = 1.0f;
+}
+
+// DepthViewer类的show()方法实现
+void DepthViewer::show(const funny_Mat& depthImage)
+{
+    // 保存深度图像
+    _depth = depthImage.clone();
+    
+    // 调用父类的show方法
+    OpencvViewer::show(_depth);
+}
+
+// DepthViewer类的onMouseCallback()方法实现
+void DepthViewer::onMouseCallback(funny_Mat& img, int event, const funny_Point pnt, bool& repaint)
+{
+    // 调用父类的onMouseCallback方法
+    OpencvViewer::onMouseCallback(img, event, pnt, repaint);
+    
+    // 检查点是否在图像范围内
+    if (pnt.x >= 0 && pnt.x < img.cols() && pnt.y >= 0 && pnt.y < img.rows())
+    {
+        // 从深度图像获取深度值
+        if (_depth.type() == CV_16U || _depth.type() == CV_16UC1)
+        {
+            // 这里可以添加深度图像的特殊处理
+            repaint = true;
+        }
+    }
+}

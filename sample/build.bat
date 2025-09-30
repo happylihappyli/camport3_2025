@@ -1,0 +1,1 @@
+python .\build_with_error_check.py

@@ -1,0 +1,32 @@
+# -*- coding: utf-8 -*-
+# 简化版 SConstruct 文件，仅用于编译 MinimalTYTest.cpp
+
+import os
+import sys
+
+# 创建环境
+env = Environment()
+
+# 设置编译选项，添加 /utf-8 选项处理 UTF-8 编码文件
+env.Append(CXXFLAGS=['/EHsc', '/TP', '/nologo', '/D_CRT_SECURE_NO_WARNINGS', '/utf-8'])
+
+# 设置包含路径
+env.Append(CPPPATH=['e:/github/camport3_2025/include'])
+
+# 设置链接库路径
+env.Append(LIBPATH=['e:/github/camport3_2025/lib/win/hostapp/x64'])
+
+# 设置链接库
+env.Append(LIBS=['tycam', 'ws2_32', 'user32'])
+
+# 指定源文件和目标文件
+source_file = 'sample_v2/sample/PointCloud/MinimalTYTest.cpp'
+target_file = 'bin/MinimalTYTest.exe'
+
+# 检查源文件是否存在
+if os.path.exists(source_file):
+    print(f"Building {target_file} from {source_file}")
+    # 构建程序
+    env.Program(target=target_file, source=source_file)
+else:
+    print(f"Error: Source file not found: {source_file}")

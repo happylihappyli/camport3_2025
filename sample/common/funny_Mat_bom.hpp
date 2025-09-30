@@ -1,0 +1,211 @@
+﻿#ifndef SAMPLE_COMMON_FUNNY_MAT_HPP_
+#define SAMPLE_COMMON_FUNNY_MAT_HPP_
+
+// 只包含最基本的标准库
+#include <cstdint>
+#include <cassert>
+#include <cstring>
+
+// 像素格式定义
+enum {
+    CV_8UC1 = 0,   // 8位无符号单通道
+    CV_8UC2 = 8,   // 8位无符号双通道
+    CV_8UC3 = 16,  // 8位无符号三通道
+    CV_8UC4 = 24,  // 8位无符号四通道
+    CV_16U = 25,   // 16位无符号
+    CV_16UC1 = 25  // 16位无符号单通道
+};
+
+// 颜色转换常量
+enum {
+    COLOR_YUV2BGR_YVYU = 0,
+    COLOR_YUV2BGR_YUYV = 1
+};
+
+class funny_Mat {
+public:
+    // 构造函数
+    funny_Mat() : rows_(0), cols_(0), type_(CV_8UC1), data_(nullptr), owns_data_(false), data_size_(0) {}
+    
+    funny_Mat(int rows, int cols, int type) 
+        : rows_(rows), cols_(cols), type_(type), owns_data_(true) {
+        int channels = getChannels(type);
+        data_size_ = static_cast<size_t>(rows) * static_cast<size_t>(cols) * static_cast<size_t>(channels);
+        data_ = new uint8_t[data_size_];
+        memset(data_, 0, data_size_);
+    }
+    
+    funny_Mat(int rows, int cols, int type, void* data) 
+        : rows_(rows), cols_(cols), type_(type), data_(reinterpret_cast<uint8_t*>(data)), owns_data_(false) {
+        int channels = getChannels(type);
+        data_size_ = static_cast<size_t>(rows) * static_cast<size_t>(cols) * static_cast<size_t>(channels);
+    }
+    
+    // 拷贝构造函数
+    funny_Mat(const funny_Mat& other) 
+        : rows_(other.rows_), cols_(other.cols_), type_(other.type_), data_size_(other.data_size_), owns_data_(true) {
+        data_ = new uint8_t[data_size_];
+        if (other.data_) {
+            memcpy(data_, other.data_, data_size_);
+        }
+    }
+    
+    // 析构函数
+    ~funny_Mat() {
+        if (owns_data_ && data_) {
+            delete[] data_;
+            data_ = nullptr;
+        }
+    }
+    
+    // 赋值操作符
+    funny_Mat& operator=(const funny_Mat& other) {
+        if (this != &other) {
+            if (owns_data_ && data_) {
+                delete[] data_;
+            }
+            
+            rows_ = other.rows_;
+            cols_ = other.cols_;
+            type_ = other.type_;
+            data_size_ = other.data_size_;
+            owns_data_ = true;
+            
+            data_ = new uint8_t[data_size_];
+            if (other.data_) {
+                memcpy(data_, other.data_, data_size_);
+            }
+        }
+        return *this;
+    }
+    
+    // 获取行数
+    int rows() const { return rows_; }
+    
+    // 获取列数
+    int cols() const { return cols_; }
+    
+    // 获取类型
+    int type() const { return type_; }
+    
+    // 获取数据指针
+    uint8_t* data() { return data_; }
+    const uint8_t* data() const { return data_; }
+    
+    // 获取数据大小
+    size_t dataSize() const { return data_size_; }
+    
+    // 辅助函数：从类型中获取通道数
+    static int getChannels(int type) {
+        switch (type) {
+            case CV_8UC1: return 1;
+            case CV_8UC2: return 2;
+            case CV_8UC3: return 3;
+            case CV_8UC4: return 4;
+            default: return 1;
+        }
+    }
+    
+    // 矩阵乘法操作符重载
+    funny_Mat operator*(float scalar) const {
+        funny_Mat result(rows_, cols_, type_);
+        
+        if (type_ == CV_16U || type_ == CV_16UC1) {
+            uint16_t* src_data = reinterpret_cast<uint16_t*>(const_cast<uint8_t*>(data_));
+            uint16_t* dst_data = reinterpret_cast<uint16_t*>(result.data_);
+            
+            size_t pixels = static_cast<size_t>(rows_) * static_cast<size_t>(cols_);
+            for (size_t i = 0; i < pixels; ++i) {
+                dst_data[i] = static_cast<uint16_t>(static_cast<float>(src_data[i]) * scalar);
+            }
+        } else if (type_ == CV_8UC1) {
+            uint8_t* dst_data = result.data_;
+            
+            size_t pixels = static_cast<size_t>(rows_) * static_cast<size_t>(cols_);
+            for (size_t i = 0; i < pixels; ++i) {
+                dst_data[i] = static_cast<uint8_t>(static_cast<float>(data_[i]) * scalar);
+            }
+        }
+        
+        return result;
+    }
+    
+    // 克隆矩阵
+    funny_Mat clone() const {
+        funny_Mat result(rows_, cols_, type_);
+        if (data_ && result.data_) {
+            memcpy(result.data_, data_, data_size_);
+        }
+        return result;
+    }
+    
+private:
+    int rows_;         // 行数
+    int cols_;         // 列数
+    int type_;         // 类型
+    uint8_t* data_;    // 数据指针
+    bool owns_data_;   // 是否拥有数据
+    size_t data_size_; // 数据大小
+};
+
+// 自定义点数据结构
+struct funny_Point {
+    int x, y;
+    
+    funny_Point(int x = 0, int y = 0) : x(x), y(y) {}
+};
+
+// 自定义矩形数据结构
+struct funny_Rect {
+    int x, y, width, height;
+    
+    funny_Rect() : x(0), y(0), width(0), height(0) {}
+    funny_Rect(int x, int y, int width, int height) : x(x), y(y), width(width), height(height) {}
+};
+
+// 自定义点云数据结构
+typedef struct {
+    float x, y, z;
+} funny_Point3f;
+
+// 自定义颜色向量数据结构
+typedef struct {
+    uint8_t val[3];
+    
+    // 重载运算符[]以兼容原有代码
+    uint8_t& operator[](int i) {
+        return val[i];
+    }
+    
+    const uint8_t& operator[](int i) const {
+        return val[i];
+    }
+} funny_Vec3b;
+
+// 标量类型
+struct funny_Scalar {
+    double val[4];
+    
+    funny_Scalar() {
+        val[0] = val[1] = val[2] = val[3] = 0.0;
+    }
+    
+    funny_Scalar(double v0, double v1 = 0.0, double v2 = 0.0, double v3 = 0.0) {
+        val[0] = v0;
+        val[1] = v1;
+        val[2] = v2;
+        val[3] = v3;
+    }
+    
+    double& operator[](int i) {
+        assert(i >= 0 && i < 4);
+        return val[i];
+    }
+    
+    const double& operator[](int i) const {
+        assert(i >= 0 && i < 4);
+        return val[i];
+    }
+};
+
+#endif // SAMPLE_COMMON_FUNNY_MAT_HPP_

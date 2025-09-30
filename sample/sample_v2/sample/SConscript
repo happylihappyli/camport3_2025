@@ -14,7 +14,7 @@ import os
 #   - 可选依赖：OpenCV（当前配置未启用）
 # ==============================================================================
 
-# 导入环境变量、bin目录路径和common_lib
+# 导入环境变量、bin_dir目录路径和common_lib
 Import('env', 'bin_dir', 'common_lib')
 
 # 定义to_bool函数
@@ -74,9 +74,11 @@ if to_bool(env.get('BUILD_SAMPLE_V2_WITH_OPENCV', '0')):
 
 # 编译sample_v2的核心库文件
 sample_v2_cpp_path = os.path.abspath(os.path.join(current_dir, '..', 'cpp'))
+common_dir = os.path.abspath(os.path.join(current_dir, '..', '..', 'common'))
 core_sources = [
     os.path.join(sample_v2_cpp_path, 'Device.cpp'),
-    os.path.join(sample_v2_cpp_path, 'Frame.cpp')
+    os.path.join(sample_v2_cpp_path, 'Frame.cpp'),
+    os.path.join(common_dir, 'funny_resize.cpp')
 ]
 
 # 确保源文件存在
@@ -97,47 +99,506 @@ for sample in ALL_CPP_API_SAMPLES:
         # 获取示例目录下的所有源文件
         sample_sources = env.Glob(join(sample_dir, '*.cpp'))
         
+        # 排除在后面有专门构建配置的文件
+        if sample_dir == 'PointCloud':
+            # 需要排除的文件列表
+            exclude_files = [
+                'PointCloud_NoCV.cpp',
+                'BasicCameraTest.cpp',
+                'SimpleDeviceEnumeration.cpp',
+                'SimpleDeviceTest.cpp',
+                'ListInterfacesTest.cpp',
+                'CorrectInterfaceTest.cpp',
+                'SimpleTYTest.cpp',
+                'MinimalTYTest.cpp',
+                'MinimalPointCloud.cpp',
+                'VerySimpleTest.cpp',
+                'SimpleCameraTest.cpp',
+                'InterfaceTest.cpp'
+            ]
+            # 过滤源文件列表
+            sample_sources = [src for src in sample_sources if not any(exclude in str(src) for exclude in exclude_files)]
+        
         # 添加核心源文件到每个示例的源文件列表
         sample_sources.extend(core_sources)
         
         if sample_sources:
-            # 创建示例程序，指定输出到bin目录
+            # 创建示例专用环境，避免obj文件命名冲突
+            sample_env = env.Clone()
+            
+            # 为每个示例设置唯一的obj前缀，防止不同示例中的main.cpp编译成相同的obj文件名
+            sample_env['OBJPREFIX'] = f"sample_v2_{sample}_"
+            
             # 添加必要的库依赖
-            env.Append(LIBS=['tycam'])
-            # 不使用显式LIBS参数，而是使用环境中已配置的LIBS
-            program = env.Program(target=target_path, source=sample_sources)
+            sample_env.Append(LIBS=['tycam'])
+            # 确保common_lib在链接库列表中
+            if 'common_lib' not in sample_env['LIBS']:
+                sample_env.Append(LIBS=['common_lib'])
+                print("Added common_lib to LIBS")
+            # 创建程序，确保链接到common_lib
+            program = sample_env.Program(target=target_path, source=sample_sources)
             
             # 修复依赖引用 - 只添加tycam库，因为cpp_api_lib不存在
             # 不使用显式依赖，只通过链接库实现
             required_libs = ['tycam']
             for lib in required_libs:
-                if lib not in env['LIBS']:
-                    env.Append(LIBS=[lib])
+                if lib not in sample_env['LIBS']:
+                    sample_env.Append(LIBS=[lib])
                     print("Added missing library: %s" % lib)
             
             # 检查tyimgproc.lib是否存在，如果存在则添加
             tyimgproc_lib_found = False
-            for lib_path in env['LIBPATH']:
+            for lib_path in sample_env['LIBPATH']:
                 if os.path.exists(os.path.join(lib_path, 'tyimgproc.lib')):
                     tyimgproc_lib_found = True
                     break
             
-            if tyimgproc_lib_found and 'tyimgproc' not in env['LIBS']:
-                env.Append(LIBS=['tyimgproc'])
+            if tyimgproc_lib_found and 'tyimgproc' not in sample_env['LIBS']:
+                sample_env.Append(LIBS=['tyimgproc'])
                 print("Added optional library: tyimgproc")
-            elif not tyimgproc_lib_found and 'tyimgproc' in env['LIBS']:
+            elif not tyimgproc_lib_found and 'tyimgproc' in sample_env['LIBS']:
                 # 如果tyimgproc不在环境中但存在于LIBS中，移除它
-                env['LIBS'].remove('tyimgproc')
+                sample_env['LIBS'].remove('tyimgproc')
                 print("Removed tyimgproc from LIBS as it was not found")
             
             # 调试输出
             print("Building sample: %s -> %s" % (sample, sample_exec))
             print("Source files: %s" % sample_sources)
-            print("Final LIBS for %s: %s" % (sample_exec, env['LIBS']))
-            print("Final CPPPATH for %s: %s" % (sample_exec, env['CPPPATH']))
+            print("Final LIBS for %s: %s" % (sample_exec, sample_env['LIBS']))
+            print("Final CPPPATH for %s: %s" % (sample_exec, sample_env['CPPPATH']))
         else:
             print('Warning: No source files found for sample: %s' % sample)
     else:
         print('Warning: Sample directory not found: %s' % sample_dir)
 
 print('All sample_v2 examples have been processed.')
+
+# 编译不依赖OpenCV的点云示例
+print("\nBuilding PointCloud_NoCV example (without OpenCV dependency)")
+pointcloud_nocv_exec = 'PointCloud_NoCV'
+pointcloud_nocv_target = os.path.join(bin_dir, pointcloud_nocv_exec)
+
+# 检查PointCloud_NoCV.cpp文件是否存在
+pointcloud_nocv_source = os.path.join('PointCloud', 'PointCloud_NoCV.cpp')
+if os.path.exists(pointcloud_nocv_source):
+    # 创建专用环境，确保不包含OpenCV依赖
+    nocv_env = env.Clone()
+    
+    # 为PointCloud_NoCV设置唯一的obj前缀
+    nocv_env['OBJPREFIX'] = "sample_v2_PointCloud_NoCV_"
+    
+    # 添加预处理器定义，启用独立程序的main函数
+    nocv_env.Append(CPPDEFINES=['STANDALONE_POINT_CLOUD_NOCV'])
+    
+    # 移除可能存在的OpenCV相关定义和库
+    if 'OPENCV_DEPENDENCIES' in nocv_env.get('CPPDEFINES', []):
+        if isinstance(nocv_env['CPPDEFINES'], list):
+            nocv_env['CPPDEFINES'].remove('OPENCV_DEPENDENCIES')
+        elif isinstance(nocv_env['CPPDEFINES'], dict):
+            del nocv_env['CPPDEFINES']['OPENCV_DEPENDENCIES']
+    
+    # 确保只链接必要的库
+    nocv_env['LIBS'] = [lib for lib in nocv_env['LIBS'] if not lib.startswith('opencv_')]
+    
+    # 准备源文件列表 - 使用PointCloud_NoCV.cpp
+    pointcloud_nocv_sources = [pointcloud_nocv_source]
+    
+    # 构建PointCloud_NoCV程序
+    nocv_program = nocv_env.Program(target=pointcloud_nocv_target, source=pointcloud_nocv_sources)
+    
+    print(f"Building PointCloud_NoCV: {pointcloud_nocv_source} -> {pointcloud_nocv_exec}")
+    print(f"Source files: {pointcloud_nocv_sources}")
+    print(f"LIBS for PointCloud_NoCV: {nocv_env['LIBS']}")
+else:
+    print(f"Warning: PointCloud_NoCV.cpp not found at {pointcloud_nocv_source}")
+
+# 编译BasicCameraTest示例
+print("\nBuilding BasicCameraTest example")
+basic_camera_test_exec = 'BasicCameraTest'
+basic_camera_test_target = os.path.join(bin_dir, basic_camera_test_exec)
+
+basic_camera_test_source = os.path.join('PointCloud', 'BasicCameraTest.cpp')
+if os.path.exists(basic_camera_test_source):
+    # 创建专用环境
+    basic_camera_test_env = env.Clone()
+    
+    # 添加预处理器定义，启用独立程序的main函数
+    basic_camera_test_env.Append(CPPDEFINES=['STANDALONE_BASIC_CAMERA_TEST'])
+    
+    # 移除可能存在的OpenCV相关定义和库
+    if 'OPENCV_DEPENDENCIES' in basic_camera_test_env.get('CPPDEFINES', []):
+        if isinstance(basic_camera_test_env['CPPDEFINES'], list):
+            basic_camera_test_env['CPPDEFINES'].remove('OPENCV_DEPENDENCIES')
+        elif isinstance(basic_camera_test_env['CPPDEFINES'], dict):
+            del basic_camera_test_env['CPPDEFINES']['OPENCV_DEPENDENCIES']
+    
+    # 确保只链接必要的库
+    basic_camera_test_env['LIBS'] = [lib for lib in basic_camera_test_env['LIBS'] if not lib.startswith('opencv_')]
+    
+    # 准备源文件列表
+    basic_camera_test_sources = [basic_camera_test_source]
+    
+    # 构建BasicCameraTest程序
+    basic_camera_test_program = basic_camera_test_env.Program(target=basic_camera_test_target, source=basic_camera_test_sources)
+    
+    print(f"Building BasicCameraTest: {basic_camera_test_source} -> {basic_camera_test_exec}")
+    print(f"Source files: {basic_camera_test_sources}")
+    print(f"LIBS for BasicCameraTest: {basic_camera_test_env['LIBS']}")
+else:
+    print(f"Warning: BasicCameraTest.cpp not found at {basic_camera_test_source}")
+
+# 编译SimpleDeviceEnumeration示例
+print("\nBuilding SimpleDeviceEnumeration example")
+simple_device_enum_exec = 'SimpleDeviceEnumeration'
+simple_device_enum_target = os.path.join(bin_dir, simple_device_enum_exec)
+
+simple_device_enum_source = os.path.join('PointCloud', 'SimpleDeviceEnumeration.cpp')
+if os.path.exists(simple_device_enum_source):
+    # 创建专用环境
+    simple_env = env.Clone()
+    
+    # 添加预处理器定义，启用独立程序的main函数
+    simple_env.Append(CPPDEFINES=['STANDALONE_SIMPLE_DEVICE_ENUMERATION'])
+    
+    # 移除可能存在的OpenCV相关定义和库
+    if 'OPENCV_DEPENDENCIES' in simple_env.get('CPPDEFINES', []):
+        if isinstance(simple_env['CPPDEFINES'], list):
+            simple_env['CPPDEFINES'].remove('OPENCV_DEPENDENCIES')
+        elif isinstance(simple_env['CPPDEFINES'], dict):
+            del simple_env['CPPDEFINES']['OPENCV_DEPENDENCIES']
+    
+    # 确保只链接必要的库
+    simple_env['LIBS'] = [lib for lib in simple_env['LIBS'] if not lib.startswith('opencv_')]
+    
+    # 准备源文件列表
+    simple_device_enum_sources = [simple_device_enum_source]
+    
+    # 构建SimpleDeviceEnumeration程序
+    simple_program = simple_env.Program(target=simple_device_enum_target, source=simple_device_enum_sources)
+    
+    print(f"Building SimpleDeviceEnumeration: {simple_device_enum_source} -> {simple_device_enum_exec}")
+    print(f"Source files: {simple_device_enum_sources}")
+    print(f"LIBS for SimpleDeviceEnumeration: {simple_env['LIBS']}")
+else:
+    print(f"Warning: SimpleDeviceEnumeration.cpp not found at {simple_device_enum_source}")
+
+# 编译SimpleDeviceTest示例
+print("\nBuilding SimpleDeviceTest example")
+simple_device_test_exec = 'SimpleDeviceTest'
+simple_device_test_target = os.path.join(bin_dir, simple_device_test_exec)
+
+simple_device_test_source = os.path.join('PointCloud', 'SimpleDeviceTest.cpp')
+if os.path.exists(simple_device_test_source):
+    # 创建专用环境
+    simple_device_test_env = env.Clone()
+    
+    # 添加预处理器定义，启用独立程序的main函数
+    simple_device_test_env.Append(CPPDEFINES=['STANDALONE_SIMPLE_DEVICE_TEST'])
+    
+    # 移除可能存在的OpenCV相关定义和库
+    if 'OPENCV_DEPENDENCIES' in simple_device_test_env.get('CPPDEFINES', []):
+        if isinstance(simple_device_test_env['CPPDEFINES'], list):
+            simple_device_test_env['CPPDEFINES'].remove('OPENCV_DEPENDENCIES')
+        elif isinstance(simple_device_test_env['CPPDEFINES'], dict):
+            del simple_device_test_env['CPPDEFINES']['OPENCV_DEPENDENCIES']
+    
+    # 确保只链接必要的库
+    simple_device_test_env['LIBS'] = [lib for lib in simple_device_test_env['LIBS'] if not lib.startswith('opencv_')]
+    
+    # 准备源文件列表
+    simple_device_test_sources = [simple_device_test_source]
+    
+    # 构建SimpleDeviceTest程序
+    simple_device_test_program = simple_device_test_env.Program(target=simple_device_test_target, source=simple_device_test_sources)
+    
+    print(f"Building SimpleDeviceTest: {simple_device_test_source} -> {simple_device_test_exec}")
+    print(f"Source files: {simple_device_test_sources}")
+    print(f"LIBS for SimpleDeviceTest: {simple_device_test_env['LIBS']}")
+else:
+    print(f"Warning: SimpleDeviceTest.cpp not found at {simple_device_test_source}")
+
+# 编译CorrectInterfaceTest示例
+print("\nBuilding CorrectInterfaceTest example")
+correct_interface_test_exec = 'CorrectInterfaceTest'
+correct_interface_test_target = os.path.join(bin_dir, correct_interface_test_exec)
+
+correct_interface_test_source = os.path.join('PointCloud', 'CorrectInterfaceTest.cpp')
+if os.path.exists(correct_interface_test_source):
+    # 创建专用环境
+    correct_interface_test_env = env.Clone()
+    
+    # 添加预处理器定义，启用独立程序的main函数
+    correct_interface_test_env.Append(CPPDEFINES=['STANDALONE_CORRECT_INTERFACE_TEST'])
+    
+    # 移除可能存在的OpenCV相关定义和库
+    if 'OPENCV_DEPENDENCIES' in correct_interface_test_env.get('CPPDEFINES', []):
+        if isinstance(correct_interface_test_env['CPPDEFINES'], list):
+            correct_interface_test_env['CPPDEFINES'].remove('OPENCV_DEPENDENCIES')
+        elif isinstance(correct_interface_test_env['CPPDEFINES'], dict):
+            del correct_interface_test_env['CPPDEFINES']['OPENCV_DEPENDENCIES']
+    
+    # 确保只链接必要的库
+    correct_interface_test_env['LIBS'] = [lib for lib in correct_interface_test_env['LIBS'] if not lib.startswith('opencv_')]
+    
+    # 准备源文件列表
+    correct_interface_test_sources = [correct_interface_test_source]
+    
+    # 构建CorrectInterfaceTest程序
+    correct_interface_test_program = correct_interface_test_env.Program(target=correct_interface_test_target, source=correct_interface_test_sources)
+    
+    print(f"Building CorrectInterfaceTest: {correct_interface_test_source} -> {correct_interface_test_exec}")
+    print(f"Source files: {correct_interface_test_sources}")
+    print(f"LIBS for CorrectInterfaceTest: {correct_interface_test_env['LIBS']}")
+else:
+    print(f"Warning: CorrectInterfaceTest.cpp not found at {correct_interface_test_source}")
+
+# 编译ListInterfacesTest示例
+print("\nBuilding ListInterfacesTest example")
+list_interfaces_test_exec = 'ListInterfacesTest'
+list_interfaces_test_target = os.path.join(bin_dir, list_interfaces_test_exec)
+
+list_interfaces_test_source = os.path.join('PointCloud', 'ListInterfacesTest.cpp')
+if os.path.exists(list_interfaces_test_source):
+    # 创建专用环境
+    list_interfaces_test_env = env.Clone()
+    
+    # 添加预处理器定义，启用独立程序的main函数
+    list_interfaces_test_env.Append(CPPDEFINES=['STANDALONE_LIST_INTERFACES_TEST'])
+    
+    # 移除可能存在的OpenCV相关定义和库
+    if 'OPENCV_DEPENDENCIES' in list_interfaces_test_env.get('CPPDEFINES', []):
+        if isinstance(list_interfaces_test_env['CPPDEFINES'], list):
+            list_interfaces_test_env['CPPDEFINES'].remove('OPENCV_DEPENDENCIES')
+        elif isinstance(list_interfaces_test_env['CPPDEFINES'], dict):
+            del list_interfaces_test_env['CPPDEFINES']['OPENCV_DEPENDENCIES']
+    
+    # 确保只链接必要的库
+    list_interfaces_test_env['LIBS'] = [lib for lib in list_interfaces_test_env['LIBS'] if not lib.startswith('opencv_')]
+    
+    # 准备源文件列表
+    list_interfaces_test_sources = [list_interfaces_test_source]
+    
+    # 构建ListInterfacesTest程序
+    list_interfaces_test_program = list_interfaces_test_env.Program(target=list_interfaces_test_target, source=list_interfaces_test_sources)
+    
+    print(f"Building ListInterfacesTest: {list_interfaces_test_source} -> {list_interfaces_test_exec}")
+    print(f"Source files: {list_interfaces_test_sources}")
+    print(f"LIBS for ListInterfacesTest: {list_interfaces_test_env['LIBS']}")
+else:
+    print(f"Warning: ListInterfacesTest.cpp not found at {list_interfaces_test_source}")
+
+# 编译InterfaceTest示例
+print("\nBuilding InterfaceTest example")
+interface_test_exec = 'InterfaceTest'
+interface_test_target = os.path.join(bin_dir, interface_test_exec)
+
+interface_test_source = os.path.join('PointCloud', 'InterfaceTest.cpp')
+if os.path.exists(interface_test_source):
+    # 创建专用环境
+    interface_test_env = env.Clone()
+    
+    # 添加预处理器定义，启用独立程序的main函数
+    interface_test_env.Append(CPPDEFINES=['STANDALONE_INTERFACE_TEST'])
+    
+    # 添加user32.lib库用于MessageBox函数
+    interface_test_env.Append(LIBS=['user32'])
+    
+    # 移除可能存在的OpenCV相关定义和库
+    if 'OPENCV_DEPENDENCIES' in interface_test_env.get('CPPDEFINES', []):
+        if isinstance(interface_test_env['CPPDEFINES'], list):
+            interface_test_env['CPPDEFINES'].remove('OPENCV_DEPENDENCIES')
+        elif isinstance(interface_test_env['CPPDEFINES'], dict):
+            del interface_test_env['CPPDEFINES']['OPENCV_DEPENDENCIES']
+    
+    # 确保只链接必要的库
+    interface_test_env['LIBS'] = [lib for lib in interface_test_env['LIBS'] if not lib.startswith('opencv_')]
+    
+    # 准备源文件列表
+    interface_test_sources = [interface_test_source]
+    
+    # 构建InterfaceTest程序
+    interface_test_program = interface_test_env.Program(target=interface_test_target, source=interface_test_sources)
+    
+    print(f"Building InterfaceTest: {interface_test_source} -> {interface_test_exec}")
+    print(f"Source files: {interface_test_sources}")
+    print(f"LIBS for InterfaceTest: {interface_test_env['LIBS']}")
+else:
+    print(f"Warning: InterfaceTest.cpp not found at {interface_test_source}")
+
+# 编译MinimalPointCloud示例
+print("\nBuilding MinimalPointCloud example")
+minimal_point_cloud_exec = 'MinimalPointCloud'
+minimal_point_cloud_target = os.path.join(bin_dir, minimal_point_cloud_exec)
+
+minimal_point_cloud_source = os.path.join('PointCloud', 'MinimalPointCloud.cpp')
+if os.path.exists(minimal_point_cloud_source):
+    # 创建专用环境
+    minimal_point_cloud_env = env.Clone()
+    
+    # 添加预处理器定义，启用独立程序的main函数
+    minimal_point_cloud_env.Append(CPPDEFINES=['STANDALONE_MINIMAL_POINT_CLOUD'])
+    
+    # 移除可能存在的OpenCV相关定义和库
+    if 'OPENCV_DEPENDENCIES' in minimal_point_cloud_env.get('CPPDEFINES', []):
+        if isinstance(minimal_point_cloud_env['CPPDEFINES'], list):
+            minimal_point_cloud_env['CPPDEFINES'].remove('OPENCV_DEPENDENCIES')
+        elif isinstance(minimal_point_cloud_env['CPPDEFINES'], dict):
+            del minimal_point_cloud_env['CPPDEFINES']['OPENCV_DEPENDENCIES']
+    
+    # 确保只链接必要的库
+    minimal_point_cloud_env['LIBS'] = [lib for lib in minimal_point_cloud_env['LIBS'] if not lib.startswith('opencv_')]
+    
+    # 准备源文件列表
+    minimal_point_cloud_sources = [minimal_point_cloud_source]
+    
+    # 构建MinimalPointCloud程序
+    minimal_point_cloud_program = minimal_point_cloud_env.Program(target=minimal_point_cloud_target, source=minimal_point_cloud_sources)
+    
+    print(f"Building MinimalPointCloud: {minimal_point_cloud_source} -> {minimal_point_cloud_exec}")
+    print(f"Source files: {minimal_point_cloud_sources}")
+    print(f"LIBS for MinimalPointCloud: {minimal_point_cloud_env['LIBS']}")
+else:
+    print(f"Warning: MinimalPointCloud.cpp not found at {minimal_point_cloud_source}")
+
+# 编译VerySimpleTest示例
+print("\nBuilding VerySimpleTest example")
+very_simple_test_exec = 'VerySimpleTest'
+very_simple_test_target = os.path.join(bin_dir, very_simple_test_exec)
+
+very_simple_test_source = os.path.join('PointCloud', 'VerySimpleTest.cpp')
+if os.path.exists(very_simple_test_source):
+    # 创建专用环境
+    very_simple_test_env = env.Clone()
+    
+    # 添加预处理器定义，启用独立程序的main函数
+    very_simple_test_env.Append(CPPDEFINES=['STANDALONE_VERY_SIMPLE_TEST'])
+    
+    # 移除可能存在的OpenCV相关定义和库
+    if 'OPENCV_DEPENDENCIES' in very_simple_test_env.get('CPPDEFINES', []):
+        if isinstance(very_simple_test_env['CPPDEFINES'], list):
+            very_simple_test_env['CPPDEFINES'].remove('OPENCV_DEPENDENCIES')
+        elif isinstance(very_simple_test_env['CPPDEFINES'], dict):
+            del very_simple_test_env['CPPDEFINES']['OPENCV_DEPENDENCIES']
+    
+    # 确保只链接必要的库
+    very_simple_test_env['LIBS'] = [lib for lib in very_simple_test_env['LIBS'] if not lib.startswith('opencv_')]
+    
+    # 准备源文件列表
+    very_simple_test_sources = [very_simple_test_source]
+    
+    # 构建VerySimpleTest程序
+    very_simple_test_program = very_simple_test_env.Program(target=very_simple_test_target, source=very_simple_test_sources)
+    
+    print(f"Building VerySimpleTest: {very_simple_test_source} -> {very_simple_test_exec}")
+    print(f"Source files: {very_simple_test_sources}")
+    print(f"LIBS for VerySimpleTest: {very_simple_test_env['LIBS']}")
+else:
+    print(f"Warning: VerySimpleTest.cpp not found at {very_simple_test_source}")
+
+# 编译SimpleTYTest示例 - 最小化的TY库测试程序
+print("\nBuilding SimpleTYTest example")
+simple_ty_test_exec = 'SimpleTYTest'
+simple_ty_test_target = os.path.join(bin_dir, simple_ty_test_exec)
+
+simple_ty_test_source = os.path.join('PointCloud', 'SimpleTYTest.cpp')
+if os.path.exists(simple_ty_test_source):
+    # 创建专用环境
+    simple_ty_test_env = env.Clone()
+    
+    # 添加预处理器定义，启用独立程序的main函数
+    simple_ty_test_env.Append(CPPDEFINES=['STANDALONE_SIMPLE_TY_TEST'])
+    
+    # 移除可能存在的OpenCV相关定义和库
+    if 'OPENCV_DEPENDENCIES' in simple_ty_test_env.get('CPPDEFINES', []):
+        if isinstance(simple_ty_test_env['CPPDEFINES'], list):
+            simple_ty_test_env['CPPDEFINES'].remove('OPENCV_DEPENDENCIES')
+        elif isinstance(simple_ty_test_env['CPPDEFINES'], dict):
+            del simple_ty_test_env['CPPDEFINES']['OPENCV_DEPENDENCIES']
+    
+    # 确保只链接必要的库
+    simple_ty_test_env['LIBS'] = [lib for lib in simple_ty_test_env['LIBS'] if not lib.startswith('opencv_')]
+    
+    # 准备源文件列表
+    simple_ty_test_sources = [simple_ty_test_source]
+    
+    # 构建SimpleTYTest程序
+    simple_ty_test_program = simple_ty_test_env.Program(target=simple_ty_test_target, source=simple_ty_test_sources)
+    
+    print(f"Building SimpleTYTest: {simple_ty_test_source} -> {simple_ty_test_exec}")
+    print(f"Source files: {simple_ty_test_sources}")
+    print(f"LIBS for SimpleTYTest: {simple_ty_test_env['LIBS']}")
+else:
+    print(f"Warning: SimpleTYTest.cpp not found at {simple_ty_test_source}")
+
+# 编译SimpleCameraTest示例
+print("\nBuilding SimpleCameraTest example")
+simple_camera_test_exec = 'SimpleCameraTest'
+simple_camera_test_target = os.path.join(bin_dir, simple_camera_test_exec)
+
+simple_camera_test_source = os.path.join('PointCloud', 'SimpleCameraTest.cpp')
+if os.path.exists(simple_camera_test_source):
+    # 创建专用环境
+    simple_camera_test_env = env.Clone()
+    
+    # 添加预处理器定义，启用独立程序的main函数
+    simple_camera_test_env.Append(CPPDEFINES=['STANDALONE_SIMPLE_CAMERA_TEST'])
+    
+    # 移除可能存在的OpenCV相关定义和库
+    if 'OPENCV_DEPENDENCIES' in simple_camera_test_env.get('CPPDEFINES', []):
+        if isinstance(simple_camera_test_env['CPPDEFINES'], list):
+            simple_camera_test_env['CPPDEFINES'].remove('OPENCV_DEPENDENCIES')
+        elif isinstance(simple_camera_test_env['CPPDEFINES'], dict):
+            del simple_camera_test_env['CPPDEFINES']['OPENCV_DEPENDENCIES']
+    
+    # 确保只链接必要的库
+    simple_camera_test_env['LIBS'] = [lib for lib in simple_camera_test_env['LIBS'] if not lib.startswith('opencv_')]
+    
+    # 准备源文件列表
+    simple_camera_test_sources = [simple_camera_test_source]
+    
+    # 构建SimpleCameraTest程序
+    simple_camera_test_program = simple_camera_test_env.Program(target=simple_camera_test_target, source=simple_camera_test_sources)
+    
+    print(f"Building SimpleCameraTest: {simple_camera_test_source} -> {simple_camera_test_exec}")
+    print(f"Source files: {simple_camera_test_sources}")
+    print(f"LIBS for SimpleCameraTest: {simple_camera_test_env['LIBS']}")
+else:
+    print(f"Warning: SimpleCameraTest.cpp not found at {simple_camera_test_source}")
+
+# 编译MinimalTYTest示例 - 最简化的TY库测试程序，不使用iostream
+print("\nBuilding MinimalTYTest example")
+minimal_ty_test_exec = 'MinimalTYTest'
+minimal_ty_test_target = os.path.join(bin_dir, minimal_ty_test_exec)
+
+minimal_ty_test_source = os.path.join('PointCloud', 'MinimalTYTest.cpp')
+if os.path.exists(minimal_ty_test_source):
+    # 创建专用环境
+    minimal_ty_test_env = env.Clone()
+    
+    # 添加预处理器定义，启用独立程序的main函数
+    minimal_ty_test_env.Append(CPPDEFINES=['STANDALONE_MINIMAL_TY_TEST'])
+    
+    # 添加user32.lib库用于MessageBox函数
+    minimal_ty_test_env.Append(LIBS=['user32'])
+    
+    # 移除可能存在的OpenCV相关定义和库
+    if 'OPENCV_DEPENDENCIES' in minimal_ty_test_env.get('CPPDEFINES', []):
+        if isinstance(minimal_ty_test_env['CPPDEFINES'], list):
+            minimal_ty_test_env['CPPDEFINES'].remove('OPENCV_DEPENDENCIES')
+        elif isinstance(minimal_ty_test_env['CPPDEFINES'], dict):
+            del minimal_ty_test_env['CPPDEFINES']['OPENCV_DEPENDENCIES']
+    
+    # 确保只链接必要的库
+    minimal_ty_test_env['LIBS'] = [lib for lib in minimal_ty_test_env['LIBS'] if not lib.startswith('opencv_')]
+    
+    # 准备源文件列表
+    minimal_ty_test_sources = [minimal_ty_test_source]
+    
+    # 构建MinimalTYTest程序
+    minimal_ty_test_program = minimal_ty_test_env.Program(target=minimal_ty_test_target, source=minimal_ty_test_sources)
+    
+    print(f"Building MinimalTYTest: {minimal_ty_test_source} -> {minimal_ty_test_exec}")
+    print(f"Source files: {minimal_ty_test_sources}")
+    print(f"LIBS for MinimalTYTest: {minimal_ty_test_env['LIBS']}")
+else:
+    print(f"Warning: MinimalTYTest.cpp not found at {minimal_ty_test_source}")

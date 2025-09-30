@@ -7,6 +7,9 @@
  ***********************************************/
 #pragma once
 #include "Device.hpp"
+#ifdef OPENCV_DEPENDENCIES
+#include <opencv2/opencv.hpp>
+#endif
 using namespace percipio_layer;
 
 class IREnhanceProcesser: public ImageProcesser{
