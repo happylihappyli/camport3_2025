@@ -32,4 +32,6 @@
 *.app
 sample/.sconsign.dblite
 *.ply
-sample/.sconsign.dblite
+
+/sample/.vs
+/sample/out
