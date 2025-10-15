@@ -1,6 +1,7 @@
 ﻿#include <stdio.h>
 #include <stdlib.h>
 #include <vector>
+#include <string>
 #include "TYApi.h"
 #include "TYImageProc.h"
 #include "TyIsp.h"
@@ -204,7 +205,10 @@ static bool initializeLibAndGetInterfaces(TY_INTERFACE_INFO** pIfaceList, uint32
 }
 
 // 从接口列表中打开设备
-static bool openDeviceFromInterfaceList(TY_INTERFACE_INFO* pIfaceList, uint32_t ifaceCount, TY_DEV_HANDLE* device) {
+static bool openDeviceFromInterfaceList(
+    TY_INTERFACE_INFO* pIfaceList, 
+    const char* deviceID,
+    uint32_t ifaceCount, TY_DEV_HANDLE* device) {
     // 打开设备
     *device = NULL;
     bool deviceOpened = false;
@@ -246,7 +250,7 @@ static bool openDeviceFromInterfaceList(TY_INTERFACE_INFO* pIfaceList, uint32_t 
                         }
                         
                         // 尝试打开第一个设备
-                        status = TYOpenDevice(ifaceHandle, pDeviceList[0].id, device);
+                        status = TYOpenDevice(ifaceHandle, deviceID, device);// pDeviceList[0].id, device);
                         if (status == TY_STATUS_OK) {
                             deviceOpened = true;
                             printf("Device opened successfully\n");
@@ -624,6 +628,8 @@ int main() {
     uint32_t ifaceCount = 0;
     TY_DEV_HANDLE device = NULL;
     bool deviceOpened = false;
+    // 设备ID变量定义
+    const char* deviceId = "207000163457";
     
     // 1. 初始化库并获取接口列表
     if (!initializeLibAndGetInterfaces(&pIfaceList, &ifaceCount)) {
@@ -631,7 +637,7 @@ int main() {
     }
     
     // 2. 从接口列表中打开设备
-    deviceOpened = openDeviceFromInterfaceList(pIfaceList, ifaceCount, &device);
+    deviceOpened = openDeviceFromInterfaceList(pIfaceList, deviceId, ifaceCount, &device);
     free(pIfaceList);
     
     if (deviceOpened) {
