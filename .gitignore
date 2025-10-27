@@ -35,3 +35,5 @@ sample/.sconsign.dblite
 
 /sample/.vs
 /sample/out
+/build
+sample/.sconsign.dblite

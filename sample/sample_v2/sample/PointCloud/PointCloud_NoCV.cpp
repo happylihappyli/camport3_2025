@@ -629,7 +629,7 @@ int main() {
     TY_DEV_HANDLE device = NULL;
     bool deviceOpened = false;
     // 设备ID变量定义
-    const char* deviceId = "207000163457";
+    const char* deviceId ="207000145944";// "207000163457";
     
     // 1. 初始化库并获取接口列表
     if (!initializeLibAndGetInterfaces(&pIfaceList, &ifaceCount)) {
