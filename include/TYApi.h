@@ -158,12 +158,12 @@ static inline int32_t TYImageHeight(TY_IMAGE_MODE imageMode)
 //------------------------------------------------------------------------------
 //  C API
 //------------------------------------------------------------------------------
-
 //------------------------------------------------------------------------------
 //  Version check
 //------------------------------------------------------------------------------
 TY_CAPI _TYInitLib(void);
 TY_CAPI TYLibVersion (TY_VERSION_INFO* version);
+
 static inline TY_STATUS TYInitLib(void)
 {
     TY_VERSION_INFO soVersion;
@@ -173,20 +173,11 @@ static inline TY_STATUS TYInitLib(void)
     }
     return _TYInitLib();
 }
+
 ///@brief  Get error information.
 ///@param  [in]  errorID       Error id.
 ///@retval Error string.                    
 TY_EXTC TY_EXPORT const char* TY_STDC TYErrorString (TY_STATUS errorID);
-
-///@brief  Init this library.
-///        
-///        We make this function to be static inline, because we do a version check here.
-///        Some user may use the mismatched header file and dynamic library, and
-///        that's quite difficult to locate the error.
-///        
-///@retval TY_STATUS_OK                     Succeed.
-///@retval TY_STATUS_ERROR                  Has been inited.
-inline TY_STATUS TYInitLib        (void);
 
 ///@brief  Deinit this library.
 ///@retval TY_STATUS_OK                     Succeed.

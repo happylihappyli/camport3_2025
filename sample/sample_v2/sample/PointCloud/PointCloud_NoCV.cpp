@@ -5,32 +5,42 @@
 #include "TYApi.h"
 #include "TYImageProc.h"
 #include "TyIsp.h"
+#include "DebugDump.h"
+#include <cstring>
 
 // RGBD配准函数：将彩色图像映射到深度坐标系
 void registerDepthToColor(const uint16_t* depthData, int depthWidth, int depthHeight,
                            const uint8_t* rgbData, int rgbWidth, int rgbHeight,
                            const TY_CAMERA_CALIB_INFO* depthCalib,
                            const TY_CAMERA_CALIB_INFO* colorCalib,
-                           uint8_t* registeredRgbData) {
+                           uint8_t* registeredRgbData, float depthScale) {
     if (!depthData || !rgbData || !registeredRgbData || !depthCalib || !colorCalib) {
         printf("Invalid input parameters for registerDepthToColor\n");
         return;
     }
 
-    // 使用TYMapRGBImageToDepthCoordinate函数将RGB图像映射到深度坐标系
-    TY_STATUS status = TYMapRGBImageToDepthCoordinate(
+    // 使用TYMapDepthImageToColorCoordinate函数将深度图像映射到彩色坐标系
+    // 首先需要创建一个中间深度图像用于配准
+    std::vector<uint16_t> registeredDepth(rgbWidth * rgbHeight);
+    
+    TY_STATUS status = TYMapDepthImageToColorCoordinate(
         depthCalib,           // 深度相机的标定信息
         depthWidth, depthHeight, depthData,  // 深度图像数据
         colorCalib,           // 彩色相机的标定信息
-        rgbWidth, rgbHeight, rgbData,        // RGB图像数据
-        registeredRgbData     // 输出的配准后的RGB数据
+        rgbWidth, rgbHeight, registeredDepth.data(),  // 输出的配准后的深度数据
+        depthScale           // 深度缩放因子
     );
 
     if (status != TY_STATUS_OK) {
-        printf("Failed to register RGB to depth coordinate, status: %d\n", status);
-        // 如果配准失败，设置所有点为默认颜色（黑色）
-        memset(registeredRgbData, 0, depthWidth * depthHeight * 3);
+        printf("Failed to register depth to color coordinate, status: %d\n", status);
+        // 如果配准失败，直接复制RGB数据
+        memcpy(registeredRgbData, rgbData, rgbWidth * rgbHeight * 3);
+        return;
     }
+
+    // 配准成功，直接使用原始RGB数据（因为深度已经映射到彩色坐标系）
+    memcpy(registeredRgbData, rgbData, rgbWidth * rgbHeight * 3);
+    printf("Depth to color registration successful\n");
 }
 
 // 限制值在指定范围内
@@ -38,6 +48,100 @@ int clamp(int value, int min, int max) {
     if (value < min) return min;
     if (value > max) return max;
     return value;
+}
+
+// 检查深度和彩色图像尺寸匹配
+void checkImageAlignment(TY_IMAGE_DATA* depthImage, TY_IMAGE_DATA* rgbImage, const char* stage) {
+    if (!depthImage || !rgbImage) {
+        printf("[checkImageAlignment] %s: Invalid image pointers\n", stage);
+        return;
+    }
+    
+    printf("[checkImageAlignment] %s:\n", stage);
+    printf("  Depth image: %d x %d (format: %d)\n", depthImage->width, depthImage->height, depthImage->pixelFormat);
+    printf("  RGB image: %d x %d (format: %d)\n", rgbImage->width, rgbImage->height, rgbImage->pixelFormat);
+    
+    // 计算宽高比
+    float depthAspect = (float)depthImage->width / depthImage->height;
+    float rgbAspect = (float)rgbImage->width / rgbImage->height;
+    float aspectDiff = fabs(depthAspect - rgbAspect);
+    
+    printf("  Depth aspect ratio: %.3f\n", depthAspect);
+    printf("  RGB aspect ratio: %.3f\n", rgbAspect);
+    printf("  Aspect ratio difference: %.3f\n", aspectDiff);
+    
+    // 检查是否需要调整尺寸
+    if (aspectDiff > 0.1) {
+        printf("  WARNING: Aspect ratios differ significantly!\n");
+    } else {
+        printf("  Aspect ratios are compatible for registration\n");
+    }
+    
+    // 计算目标尺寸（参考main.cpp的逻辑）
+    int targetWidth = depthImage->width;
+    int targetHeight = depthImage->width * rgbImage->height / rgbImage->width;
+    printf("  Registration target size: %d x %d\n", targetWidth, targetHeight);
+}
+
+// 验证RGB数据格式和尺寸
+void validateRgbData(uint8_t* rgbData, int width, int height, const char* stage) {
+    if (!rgbData) {
+        printf("[validateRgbData] %s: RGB data is NULL\n", stage);
+        return;
+    }
+    
+    printf("[validateRgbData] %s: RGB data size = %d x %d\n", stage, width, height);
+    
+    // 检查几个像素的颜色值
+    for (int i = 0; i < 5; i++) {
+        int x = width / 6 * (i + 1);
+        int y = height / 2;
+        int pixelIndex = (y * width + x) * 3;
+        
+        if (pixelIndex + 2 < width * height * 3) {
+            uint8_t r = rgbData[pixelIndex + 2];  // BGR格式，R在索引2
+            uint8_t g = rgbData[pixelIndex + 1];  // G在索引1
+            uint8_t b = rgbData[pixelIndex + 0];  // B在索引0
+            
+            printf("[validateRgbData] %s: Pixel[%d,%d] = RGB(%d,%d,%d)\n", 
+                   stage, x, y, r, g, b);
+        }
+    }
+    
+    // 检查边界像素
+    int cornerIndex = (width * height - 1) * 3;
+    if (cornerIndex + 2 < width * height * 3) {
+        uint8_t r = rgbData[cornerIndex + 2];
+        uint8_t g = rgbData[cornerIndex + 1];
+        uint8_t b = rgbData[cornerIndex + 0];
+        printf("[validateRgbData] %s: Corner pixel RGB(%d,%d,%d)\n", stage, r, g, b);
+    }
+    
+    // 检查图像统计信息
+    int totalPixels = width * height;
+    int blackPixels = 0;
+    int whitePixels = 0;
+    int colorfulPixels = 0;
+    
+    for (int i = 0; i < totalPixels; i++) {
+        int pixelIndex = i * 3;
+        uint8_t r = rgbData[pixelIndex + 2];
+        uint8_t g = rgbData[pixelIndex + 1];
+        uint8_t b = rgbData[pixelIndex + 0];
+        
+        if (r == 0 && g == 0 && b == 0) {
+            blackPixels++;
+        } else if (r == 255 && g == 255 && b == 255) {
+            whitePixels++;
+        } else if (r > 50 || g > 50 || b > 50) {  // 有颜色
+            colorfulPixels++;
+        }
+    }
+    
+    printf("[validateRgbData] %s: Statistics - Black: %d (%.1f%%), White: %d (%.1f%%), Colorful: %d (%.1f%%)\n",
+           stage, blackPixels, (float)blackPixels/totalPixels*100, 
+           whitePixels, (float)whitePixels/totalPixels*100,
+           colorfulPixels, (float)colorfulPixels/totalPixels*100);
 }
 
 // 将彩色点云数据保存为PLY文件
@@ -55,9 +159,9 @@ void savePointsToPly(const TY_VECT_3F* p3d, const uint8_t* rgbData, int width, i
     fprintf(fp, "property float x\n");
     fprintf(fp, "property float y\n");
     fprintf(fp, "property float z\n");
-    fprintf(fp, "property uchar red\n");
-    fprintf(fp, "property uchar green\n");
     fprintf(fp, "property uchar blue\n");
+    fprintf(fp, "property uchar green\n");
+    fprintf(fp, "property uchar red\n");
     fprintf(fp, "end_header\n");
 
     // 写入点云数据（包含颜色）
@@ -66,11 +170,12 @@ void savePointsToPly(const TY_VECT_3F* p3d, const uint8_t* rgbData, int width, i
         for (int x = 0; x < width; x++) {
             int index = y * width + x;
             if (p3d[index].z != 0 && rgbData) {
-                // 获取RGB颜色值（注意BGR顺序）
-                uint8_t b = rgbData[index * 3];
-                uint8_t g = rgbData[index * 3 + 1];
-                uint8_t r = rgbData[index * 3 + 2];
-                fprintf(fp, "%f %f %f %d %d %d\n", p3d[index].x, p3d[index].y, p3d[index].z, r, g, b);
+                // 获取BGR颜色值（注意：rgbData是BGR格式）
+                uint8_t b = rgbData[index * 3];     // Blue
+                uint8_t g = rgbData[index * 3 + 1]; // Green
+                uint8_t r = rgbData[index * 3 + 2]; // Red
+                // PLY文件格式：blue, green, red，所以写入顺序是 b, g, r
+                fprintf(fp, "%f %f %f %d %d %d\n", p3d[index].x, p3d[index].y, p3d[index].z, b, g, r);
                 validPoints++;
             } else if (p3d[index].z != 0) {
                 // 如果没有颜色数据，使用默认颜色
@@ -398,45 +503,9 @@ static bool processRgbImage(TY_DEV_HANDLE device, TY_ISP_HANDLE colorISP,
     
     // 简化处理：直接使用或转换RGB数据
     TY_STATUS status = TY_STATUS_OK;
-    if (rgbImage->pixelFormat == TY_PIXEL_FORMAT_BGR || 
-        rgbImage->pixelFormat == TY_PIXEL_FORMAT_RGB) {
-        // 如果相机已经提供了RGB/BGR格式数据，直接复制
-        printf("Camera already provides RGB/BGR format, copying directly\n");
-        int copySize = rgbImage->size > (rgbImage->width * rgbImage->height * 3) ? 
-                      (rgbImage->width * rgbImage->height * 3) : rgbImage->size;
-        memcpy(*rgbData, rgbImage->buffer, copySize);
-    } else if (rgbImage->pixelFormat == TY_PIXEL_FORMAT_YUYV) {
-        // 处理默认的YUYV格式
-        printf("Processing YUYV format data\n");
-        uint8_t* yuyvData = (uint8_t*)rgbImage->buffer;
-        int pixelCount = rgbImage->width * rgbImage->height;
-        
-        // YUYV到BGR转换
-        for (int i = 0, j = 0; i < pixelCount * 2; i += 4, j += 6) {
-            // 第一个像素
-            int y0 = yuyvData[i];
-            int u = yuyvData[i+1];
-            int y1 = yuyvData[i+2];
-            int v = yuyvData[i+3];
-            
-            // YUV到RGB转换公式
-            int r0 = y0 + 1.402 * (v - 128);
-            int g0 = y0 - 0.34414 * (u - 128) - 0.71414 * (v - 128);
-            int b0 = y0 + 1.772 * (u - 128);
-            
-            int r1 = y1 + 1.402 * (v - 128);
-            int g1 = y1 - 0.34414 * (u - 128) - 0.71414 * (v - 128);
-            int b1 = y1 + 1.772 * (u - 128);
-            
-            // 范围裁剪并存储为BGR格式
-            (*rgbData)[j] = (uint8_t)clamp(b0, 0, 255);
-            (*rgbData)[j+1] = (uint8_t)clamp(g0, 0, 255);
-            (*rgbData)[j+2] = (uint8_t)clamp(r0, 0, 255);
-            
-            (*rgbData)[j+3] = (uint8_t)clamp(b1, 0, 255);
-            (*rgbData)[j+4] = (uint8_t)clamp(g1, 0, 255);
-            (*rgbData)[j+5] = (uint8_t)clamp(r1, 0, 255);
-        }
+    std::vector<uint8_t> tempBgr;
+    if (convert_to_bgr_buffer(static_cast<uint8_t*>(rgbImage->buffer), rgbImage->width, rgbImage->height, rgbImage->pixelFormat, tempBgr)) {
+        memcpy(*rgbData, tempBgr.data(), tempBgr.size());
     } else if (colorISP) {
         // 尝试使用ISP进行简单处理
         printf("Trying simple ISP processing\n");
@@ -469,59 +538,7 @@ static bool processRgbImage(TY_DEV_HANDLE device, TY_ISP_HANDLE colorISP,
     }
 }
 
-// 注册RGB数据到点云坐标
-static bool registerRgbData(TY_DEV_HANDLE device, const uint8_t* rgbData,
-                           TY_IMAGE_DATA* rgbImage, int depthWidth, int depthHeight, 
-                           uint8_t** registeredRgbData) {
-    // 分配配准后的RGB数据内存
-    *registeredRgbData = (uint8_t*)malloc(depthWidth * depthHeight * 3);
-    if (!*registeredRgbData) {
-        printf("Failed to allocate memory for registered RGB data\n");
-        return false;
-    }
-    
-    printf("Performing RGB data registration\n");
-    
-    // 获取深度和RGB相机的校准信息
-    TY_CAMERA_CALIB_INFO colorCalib;
-    TY_STATUS status = TYGetStruct(device, TY_COMPONENT_RGB_CAM, TY_STRUCT_CAM_CALIB_DATA, &colorCalib, sizeof(colorCalib));
-    
-    if (status == TY_STATUS_OK && rgbData) {
-        printf("Using camera calibration data for registration\n");
-        
-        // 检查RGB和深度图像的宽高比
-        float widthRatio = (float)depthWidth / rgbImage->width;
-        float heightRatio = (float)depthHeight / rgbImage->height;
-        
-        // 如果宽高比接近，使用简单的双线性插值缩放
-        if (fabs(widthRatio - heightRatio) < 0.1) {
-            scaleRgbImage(rgbData, rgbImage->width, rgbImage->height, 
-                         *registeredRgbData, depthWidth, depthHeight);
-        } else {
-            // 如果宽高比差异较大，使用平铺方式
-            tileRgbImage(rgbData, rgbImage->width, rgbImage->height, 
-                         *registeredRgbData, depthWidth, depthHeight);
-        }
-    } else if (rgbData) {
-        // 如果没有校准信息但有RGB数据，使用简单的映射
-        printf("Using simple RGB mapping without calibration data\n");
-        
-        // 假设RGB和深度图像分辨率相同或使用简单映射
-        if (rgbImage->width == depthWidth && rgbImage->height == depthHeight) {
-            // 如果分辨率相同，直接复制
-            memcpy(*registeredRgbData, rgbData, depthWidth * depthHeight * 3);
-        } else {
-            // 否则使用简单的最近邻缩放
-            scaleRgbImage(rgbData, rgbImage->width, rgbImage->height, 
-                         *registeredRgbData, depthWidth, depthHeight);
-        }
-    } else {
-        // 如果没有RGB数据，创建简单的颜色渐变效果
-        createDefaultColorGradient(*registeredRgbData, depthWidth, depthHeight);
-    }
-    printf("RGB data registration completed\n");
-    return true;
-}
+
 
 // 处理深度图像并生成点云
 static bool processDepthImageAndGeneratePointCloud(TY_DEV_HANDLE device, TY_IMAGE_DATA* depthImage, 
@@ -533,18 +550,17 @@ static bool processDepthImageAndGeneratePointCloud(TY_DEV_HANDLE device, TY_IMAG
     }
     
     printf("Depth image found: %d x %d\n", depthImage->width, depthImage->height);
-    
-    // 获取校准信息
-    TY_CAMERA_CALIB_INFO depthCalib;
-    TY_STATUS status = TYGetStruct(device, TY_COMPONENT_DEPTH_CAM, TY_STRUCT_CAM_CALIB_DATA, &depthCalib, sizeof(depthCalib));
-    if (status != TY_STATUS_OK) {
-        printf("Failed to get calibration info: %d (%s)\n", status, TYErrorString(status));
-        return false;
-    }
+    const std::string debugDir = prepare_debug_directory("nocv");
+    static int dumpIndex = 0;
+    const std::string frameSuffix = "_frame" + std::to_string(dumpIndex++);
+    dump_uint16_matrix_txt(debugDir + "/depth_raw" + frameSuffix + ".txt",
+        reinterpret_cast<const uint16_t*>(depthImage->buffer),
+        depthImage->width, depthImage->height,
+        "Raw depth image from TYFetchFrame");
     
     // 获取深度比例
     float depthScale = 1.0f;
-    status = TYGetFloat(device, TY_COMPONENT_DEPTH_CAM, TY_FLOAT_SCALE_UNIT, &depthScale);
+    TY_STATUS status = TYGetFloat(device, TY_COMPONENT_DEPTH_CAM, TY_FLOAT_SCALE_UNIT, &depthScale);
     if (status != TY_STATUS_OK) {
         printf("Failed to get depth scale: %d (%s)\n", status, TYErrorString(status));
         return false;
@@ -552,40 +568,355 @@ static bool processDepthImageAndGeneratePointCloud(TY_DEV_HANDLE device, TY_IMAG
     
     printf("Depth scale: %.6f\n", depthScale);
     
-    // 分配点云内存
-    int width = depthImage->width;
-    int height = depthImage->height;
-    TY_VECT_3F* pointCloud = (TY_VECT_3F*)malloc(sizeof(TY_VECT_3F) * width * height);
-    if (!pointCloud) {
-        printf("Failed to allocate memory for point cloud\n");
-        return false;
-    }
-    
-    // 转换深度图像到点云
-    TYMapDepthImageToPoint3d(&depthCalib, width, height, (uint16_t*)depthImage->buffer, pointCloud, depthScale);
-    
     // 处理彩色图像（如果可用）
-    uint8_t* rgbData = NULL;
-    uint8_t* registeredRgbData = NULL;
-    
-    if (rgbImage && colorEnabled) {
-        if (processRgbImage(device, colorISP, rgbImage, &rgbData)) {
-            registerRgbData(device, rgbData, rgbImage, width, height, &registeredRgbData);
+        uint8_t* rgbData = NULL;
+        uint8_t* registeredRgbData = NULL;
+        uint8_t* undistortedRgbBuffer = NULL; // 跟踪去畸变缓冲区
+        uint16_t* registeredDepthBuffer = NULL; // 配准后的深度缓冲区
+        TY_VECT_3F* pointCloud = NULL;
+        int pointCloudWidth = 0;
+        int pointCloudHeight = 0;
+        
+        if (rgbImage && colorEnabled) {
+            std::vector<uint8_t> rawCameraBgr;
+            if (convert_to_bgr_buffer(static_cast<uint8_t*>(rgbImage->buffer), rgbImage->width, rgbImage->height, rgbImage->pixelFormat, rawCameraBgr)) {
+                dump_rgb_bgr_txt(debugDir + "/rgb_sensor_input" + frameSuffix + ".txt",
+                    rawCameraBgr.data(), rgbImage->width, rgbImage->height,
+                    "RGB sensor data converted to BGR (before processing)");
+            }
+            if (processRgbImage(device, colorISP, rgbImage, &rgbData)) {
+                // 检查图像尺寸对齐
+                checkImageAlignment(depthImage, rgbImage, "before_registration");
+                
+                // 验证初始RGB数据
+                validateRgbData(rgbData, rgbImage->width, rgbImage->height, "initial_rgb");
+                dump_rgb_bgr_txt(debugDir + "/rgb_after_initial_convert" + frameSuffix + ".txt",
+                    rgbData, rgbImage->width, rgbImage->height,
+                    "RGB data after initial conversion (before undistort)");
+            // 获取深度和彩色相机校准信息
+            TY_CAMERA_CALIB_INFO depthCalib, colorCalib;
+            status = TYGetStruct(device, TY_COMPONENT_DEPTH_CAM, TY_STRUCT_CAM_CALIB_DATA, &depthCalib, sizeof(depthCalib));
+            if (status != TY_STATUS_OK) {
+                printf("Failed to get depth calibration info: %d (%s)\n", status, TYErrorString(status));
+                free(rgbData);
+                return false;
+            }
+            
+            status = TYGetStruct(device, TY_COMPONENT_RGB_CAM, TY_STRUCT_CAM_CALIB_DATA, &colorCalib, sizeof(colorCalib));
+            if (status != TY_STATUS_OK) {
+                printf("Failed to get color calibration info: %d (%s)\n", status, TYErrorString(status));
+                free(rgbData);
+                return false;
+            }
+            
+            // 检查是否需要深度图像去畸变
+            bool depthNeedUndistort = false;
+            status = TYHasFeature(device, TY_COMPONENT_DEPTH_CAM, TY_STRUCT_CAM_DISTORTION, &depthNeedUndistort);
+            if (status != TY_STATUS_OK) {
+                printf("Failed to check depth distortion: %d (%s)\n", status, TYErrorString(status));
+                depthNeedUndistort = false;
+            }
+            
+            // 检查是否需要彩色图像去畸变
+            bool colorNeedUndistort = false;
+            status = TYHasFeature(device, TY_COMPONENT_RGB_CAM, TY_STRUCT_CAM_DISTORTION, &colorNeedUndistort);
+            if (status != TY_STATUS_OK) {
+                printf("Failed to check color distortion: %d (%s)\n", status, TYErrorString(status));
+                colorNeedUndistort = false;
+            }
+            
+            // 深度图像去畸变
+            if (depthNeedUndistort) {
+                TY_IMAGE_DATA undistortedDepth = *depthImage;
+                uint8_t* undistortedBuffer = (uint8_t*)malloc(depthImage->size);
+                if (undistortedBuffer) {
+                    undistortedDepth.buffer = undistortedBuffer;
+                    status = TYUndistortImage(&depthCalib, depthImage, NULL, &undistortedDepth);
+                    if (status == TY_STATUS_OK) {
+                        printf("Depth image undistortion successful\n");
+                        dump_uint16_matrix_txt(debugDir + "/depth_undistorted" + frameSuffix + ".txt",
+                            reinterpret_cast<const uint16_t*>(undistortedDepth.buffer),
+                            undistortedDepth.width, undistortedDepth.height,
+                            "Depth image after undistortion");
+                        depthImage = &undistortedDepth; // 使用去畸变后的深度图像
+                    } else {
+                        printf("Depth image undistortion failed: %d (%s)\n", status, TYErrorString(status));
+                        free(undistortedBuffer);
+                    }
+                }
+            }
+            
+            // 彩色图像去畸变（参考main.cpp的逻辑）
+            // 注意：去畸变应该在原始图像格式上进行，然后再转换为BGR格式
+            TY_IMAGE_DATA* finalRgbImage = rgbImage;
+            bool colorUndistortionSuccess = false;
+            
+            if (colorNeedUndistort) {
+                TY_IMAGE_DATA undistortedRgb = *rgbImage;
+                undistortedRgbBuffer = (uint8_t*)malloc(rgbImage->size);
+                if (undistortedRgbBuffer) {
+                    undistortedRgb.buffer = undistortedRgbBuffer;
+                    status = TYUndistortImage(&colorCalib, rgbImage, NULL, &undistortedRgb);
+                    if (status == TY_STATUS_OK) {
+                        printf("Color image undistortion successful\n");
+                        finalRgbImage = &undistortedRgb; // 使用去畸变后的图像
+                        colorUndistortionSuccess = true;
+                    } else {
+                        printf("Color image undistortion failed: %d (%s)\n", status, TYErrorString(status));
+                        free(undistortedRgbBuffer);
+                        undistortedRgbBuffer = NULL;
+                        // 如果去畸变失败，标记为失败并继续使用原始图像
+                        colorUndistortionSuccess = false;
+                        finalRgbImage = rgbImage;
+                    }
+                } else {
+                    printf("Failed to allocate buffer for RGB undistortion\n");
+                    colorUndistortionSuccess = false;
+                    finalRgbImage = rgbImage;
+                }
+            } else {
+                colorUndistortionSuccess = true; // 不需要去畸变，认为成功
+            }
+            
+            // 如果进行了去畸变，需要重新处理RGB数据
+            if (finalRgbImage != rgbImage) {
+                // 释放旧的RGB数据
+                free(rgbData);
+                rgbData = NULL;
+                
+                // 重新处理去畸变后的RGB图像
+                if (!processRgbImage(device, colorISP, finalRgbImage, &rgbData)) {
+                    printf("Failed to process undistorted RGB image\n");
+                    if (undistortedRgbBuffer) free(undistortedRgbBuffer);
+                    return false;
+                }
+                
+                // 更新rgbImage指针
+                rgbImage = finalRgbImage;
+                
+                // 验证重新处理后的RGB数据
+                validateRgbData(rgbData, rgbImage->width, rgbImage->height, "after_undistortion");
+                dump_rgb_bgr_txt(debugDir + "/rgb_after_undistort" + frameSuffix + ".txt",
+                    rgbData, rgbImage->width, rgbImage->height,
+                    "RGB data after undistortion + reprojection");
+            }
+            
+            // 确保彩色图像去畸变成功后才进行配准（参考main.cpp的逻辑）
+            if (colorNeedUndistort && !colorUndistortionSuccess) {
+                printf("Color undistortion failed, skipping RGBD registration\n");
+                // 直接在深度坐标系下生成点云
+                pointCloudWidth = depthImage->width;
+                pointCloudHeight = depthImage->height;
+                pointCloud = (TY_VECT_3F*)malloc(sizeof(TY_VECT_3F) * pointCloudWidth * pointCloudHeight);
+                if (!pointCloud) {
+                    printf("Failed to allocate memory for point cloud\n");
+                    if (rgbData) free(rgbData);
+                    return false;
+                }
+                
+                TYMapDepthImageToPoint3d(&depthCalib, pointCloudWidth, pointCloudHeight, 
+                                       (uint16_t*)depthImage->buffer, pointCloud, depthScale);
+                
+                printf("Point cloud generated in depth coordinate system (no registration): %d x %d\n", 
+                       pointCloudWidth, pointCloudHeight);
+                
+                // 保存点云（使用原始RGB数据）
+                printf("Saving point cloud without registration...\n");
+                savePointsToPly(pointCloud, rgbData, pointCloudWidth, pointCloudHeight, "color_pointcloud.ply");
+                
+                // 释放资源
+                free(pointCloud);
+                if (rgbData) free(rgbData);
+                if (undistortedRgbBuffer) free(undistortedRgbBuffer);
+                
+                return true;
+            }
+            
+            // 参考main.cpp的处理方式：先配准到中间尺寸，保持深度图像宽度，高度按彩色图像宽高比计算
+            // main.cpp第363-364行：dstW = depth_image->width(), dstH = depth_image->width() * color_image->height() / color_image->width()
+            int dstW = depthImage->width;
+            int dstH = depthImage->width * rgbImage->height / rgbImage->width;
+            printf("Registration target size: %d x %d\n", dstW, dstH);
+            
+            // 分配配准后的深度图像内存（参考main.cpp第366-369行）
+            // 注意：输出尺寸是dstW x dstH，不是rgbImage的尺寸
+            registeredDepthBuffer = (uint16_t*)malloc(sizeof(uint16_t) * dstW * dstH);
+            if (!registeredDepthBuffer) {
+                printf("Failed to allocate memory for registered depth image\n");
+                if (rgbData) free(rgbData);
+                if (undistortedRgbBuffer) free(undistortedRgbBuffer);
+                return false;
+            }
+            
+            // 将深度图像映射到彩色坐标系（参考main.cpp第371-376行）
+            // 关键：直接使用原始去畸变后的深度图像，不要手动调整尺寸
+            // TYMapDepthImageToColorCoordinate会自动处理尺寸转换
+            status = TYMapDepthImageToColorCoordinate(
+                &depthCalib,
+                depthImage->width, depthImage->height,  // 输入：原始去畸变后的深度图像尺寸
+                static_cast<const uint16_t*>(depthImage->buffer),  // 输入：原始深度图像数据
+                &colorCalib,
+                dstW, dstH,  // 输出：dstW x dstH（不是rgbImage的尺寸！）
+                registeredDepthBuffer,  // 输出缓冲区（dstW x dstH）
+                depthScale
+            );
+            
+            if (status != TY_STATUS_OK) {
+                printf("Failed to register depth to color coordinate: %d (%s)\n", status, TYErrorString(status));
+                free(rgbData);
+                free(undistortedRgbBuffer);
+                free(registeredDepthBuffer);
+                return false;
+            }
+            
+            printf("Depth image registered to color coordinate: %d x %d\n", dstW, dstH);
+            dump_uint16_matrix_txt(debugDir + "/depth_registered" + frameSuffix + ".txt",
+                registeredDepthBuffer, dstW, dstH,
+                "Depth image resampled in color coordinate system");
+            
+            // 在彩色坐标系下生成点云（参考main.cpp第379-381行）
+            // 注意：点云尺寸是registration_depth的尺寸（dstW x dstH），不是rgbImage的尺寸
+            pointCloudWidth = dstW;
+            pointCloudHeight = dstH;
+            pointCloud = (TY_VECT_3F*)malloc(sizeof(TY_VECT_3F) * pointCloudWidth * pointCloudHeight);
+            if (!pointCloud) {
+                printf("Failed to allocate memory for point cloud\n");
+                free(rgbData);
+                free(undistortedRgbBuffer);
+                free(registeredDepthBuffer);
+                return false;
+            }
+            
+            // 使用color_calib在彩色坐标系下生成点云（参考main.cpp第380-381行）
+            TYMapDepthImageToPoint3d(&colorCalib, pointCloudWidth, pointCloudHeight, 
+                                   registeredDepthBuffer, pointCloud, depthScale);
+            
+            // 处理RGB数据以匹配点云尺寸（参考main.cpp第378行：registration_color = color_image）
+            // 注意：点云尺寸是dstW x dstH，但rgbData是rgbImage->width x rgbImage->height
+            // 需要将RGB数据调整到点云尺寸，或者调整点云到RGB尺寸
+            // 根据main.cpp的逻辑，点云使用registration_depth的尺寸，颜色使用color_image
+            // 在savePointsToPly中会处理尺寸不匹配的情况
+            // 这里我们需要将RGB数据调整到点云尺寸（dstW x dstH）
+            registeredRgbData = (uint8_t*)malloc(dstW * dstH * 3);
+            if (!registeredRgbData) {
+                printf("Failed to allocate memory for registered RGB data\n");
+                free(pointCloud);
+                free(rgbData);
+                free(undistortedRgbBuffer);
+                free(registeredDepthBuffer);
+                return false;
+            }
+            
+            // 将RGB数据从rgbImage尺寸调整到点云尺寸（dstW x dstH）
+            // 使用双线性插值或最近邻插值
+            for (int y = 0; y < dstH; y++) {
+                for (int x = 0; x < dstW; x++) {
+                    // 计算源RGB图像中的坐标
+                    int srcX = (x * rgbImage->width) / dstW;
+                    int srcY = (y * rgbImage->height) / dstH;
+                    
+                    // 确保坐标在有效范围内
+                    if (srcX >= rgbImage->width) srcX = rgbImage->width - 1;
+                    if (srcY >= rgbImage->height) srcY = rgbImage->height - 1;
+                    
+                    int srcIdx = (srcY * rgbImage->width + srcX) * 3;
+                    int dstIdx = (y * dstW + x) * 3;
+                    
+                    // 复制BGR数据
+                    registeredRgbData[dstIdx] = rgbData[srcIdx];     // Blue
+                    registeredRgbData[dstIdx + 1] = rgbData[srcIdx + 1]; // Green
+                    registeredRgbData[dstIdx + 2] = rgbData[srcIdx + 2]; // Red
+                }
+            }
+            
+            // 释放原始RGB数据
+            free(rgbData);
+            rgbData = NULL;
+            
+            dump_rgb_bgr_txt(debugDir + "/rgb_resampled_for_registration" + frameSuffix + ".txt",
+                registeredRgbData, dstW, dstH,
+                "RGB data resampled to match registered depth size");
+
+            
+            printf("Point cloud generated in color coordinate system: %d x %d\n", pointCloudWidth, pointCloudHeight);
         }
     }
     
-    // 保存彩色点云，使用配准后的RGB数据
+    // 如果没有彩色图像或配准失败，直接在深度坐标系下生成点云
+    if (!pointCloud) {
+        // 获取深度相机校准信息
+        TY_CAMERA_CALIB_INFO depthCalib;
+        status = TYGetStruct(device, TY_COMPONENT_DEPTH_CAM, TY_STRUCT_CAM_CALIB_DATA, &depthCalib, sizeof(depthCalib));
+        if (status != TY_STATUS_OK) {
+            printf("Failed to get depth calibration info: %d (%s)\n", status, TYErrorString(status));
+            if (rgbData) free(rgbData);
+            return false;
+        }
+        
+        // 检查是否需要深度图像去畸变
+        bool depthNeedUndistort = false;
+        status = TYHasFeature(device, TY_COMPONENT_DEPTH_CAM, TY_STRUCT_CAM_DISTORTION, &depthNeedUndistort);
+        if (status != TY_STATUS_OK) {
+            printf("Failed to check depth distortion: %d (%s)\n", status, TYErrorString(status));
+            depthNeedUndistort = false;
+        }
+        
+        // 深度图像去畸变
+        if (depthNeedUndistort) {
+            TY_IMAGE_DATA undistortedDepth = *depthImage;
+            uint8_t* undistortedBuffer = (uint8_t*)malloc(depthImage->size);
+            if (undistortedBuffer) {
+                undistortedDepth.buffer = undistortedBuffer;
+                status = TYUndistortImage(&depthCalib, depthImage, NULL, &undistortedDepth);
+                if (status == TY_STATUS_OK) {
+                    printf("Depth image undistortion successful\n");
+                    depthImage = &undistortedDepth; // 使用去畸变后的深度图像
+                } else {
+                    printf("Depth image undistortion failed: %d (%s)\n", status, TYErrorString(status));
+                    free(undistortedBuffer);
+                }
+            }
+        }
+        
+        pointCloudWidth = depthImage->width;
+        pointCloudHeight = depthImage->height;
+        pointCloud = (TY_VECT_3F*)malloc(sizeof(TY_VECT_3F) * pointCloudWidth * pointCloudHeight);
+        if (!pointCloud) {
+            printf("Failed to allocate memory for point cloud\n");
+            if (rgbData) free(rgbData);
+            return false;
+        }
+        
+        // 转换深度图像到点云
+        TYMapDepthImageToPoint3d(&depthCalib, pointCloudWidth, pointCloudHeight, 
+                               (uint16_t*)depthImage->buffer, pointCloud, depthScale);
+        
+
+        
+        printf("Point cloud generated in depth coordinate system: %d x %d\n", pointCloudWidth, pointCloudHeight);
+    }
+    
+    // 验证最终用于保存的RGB数据
+    validateRgbData(registeredRgbData ? registeredRgbData : rgbData, pointCloudWidth, pointCloudHeight, "final_for_save");
+    
+    // 保存彩色点云
     printf("Saving color point cloud...\n");
-    savePointsToPly(pointCloud, registeredRgbData ? registeredRgbData : rgbData, width, height, "color_pointcloud.ply");
+    savePointsToPly(pointCloud, registeredRgbData ? registeredRgbData : rgbData, pointCloudWidth, pointCloudHeight, "color_pointcloud.ply");
     
     // 释放资源
-    free(pointCloud);
-    if (rgbData) {
-        free(rgbData);
-    }
-    if (registeredRgbData) {
-        free(registeredRgbData);
-    }
+            free(pointCloud);
+            if (rgbData) {
+                free(rgbData);
+            }
+            if (registeredRgbData) {
+                free(registeredRgbData);
+            }
+            if (undistortedRgbBuffer) {
+                free(undistortedRgbBuffer);
+            }
+            if (registeredDepthBuffer) {
+                free(registeredDepthBuffer);
+            }
     
     return true;
 }

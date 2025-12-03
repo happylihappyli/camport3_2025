@@ -91,49 +91,48 @@
 #   endif
 #endif
 
+///@brief API call return status
+typedef int32_t TY_STATUS;
+
 #define TY_CAPI TY_EXTC TY_EXPORT TY_STATUS TY_STDC
 
 #include "TYVer.h"
 
 //------------------------------------------------------------------------------
-///@brief API call return status
-typedef enum TY_STATUS_LIST :int32_t
-{
-    TY_STATUS_OK                = 0,
-    TY_STATUS_ERROR             = -1001,
-    TY_STATUS_NOT_INITED        = -1002,
-    TY_STATUS_NOT_IMPLEMENTED   = -1003,
-    TY_STATUS_NOT_PERMITTED     = -1004,
-    TY_STATUS_DEVICE_ERROR      = -1005,
-    TY_STATUS_INVALID_PARAMETER = -1006,
-    TY_STATUS_INVALID_HANDLE    = -1007,
-    TY_STATUS_INVALID_COMPONENT = -1008,
-    TY_STATUS_INVALID_FEATURE   = -1009,
-    TY_STATUS_WRONG_TYPE        = -1010,
-    TY_STATUS_WRONG_SIZE        = -1011,
-    TY_STATUS_OUT_OF_MEMORY     = -1012,
-    TY_STATUS_OUT_OF_RANGE      = -1013,
-    TY_STATUS_TIMEOUT           = -1014,
-    TY_STATUS_WRONG_MODE        = -1015,
-    TY_STATUS_BUSY              = -1016,
-    TY_STATUS_IDLE              = -1017,
-    TY_STATUS_NO_DATA           = -1018,
-    TY_STATUS_NO_BUFFER         = -1019,
-    TY_STATUS_NULL_POINTER      = -1020,
-    TY_STATUS_READONLY_FEATURE  = -1021,
-    TY_STATUS_INVALID_DESCRIPTOR= -1022,
-    TY_STATUS_INVALID_INTERFACE = -1023,
-    TY_STATUS_FIRMWARE_ERROR    = -1024,
+// API调用返回状态码定义
+#define TY_STATUS_OK                0
+#define TY_STATUS_ERROR             -1001
+#define TY_STATUS_NOT_INITED        -1002
+#define TY_STATUS_NOT_IMPLEMENTED   -1003
+#define TY_STATUS_NOT_PERMITTED     -1004
+#define TY_STATUS_DEVICE_ERROR      -1005
+#define TY_STATUS_INVALID_PARAMETER -1006
+#define TY_STATUS_INVALID_HANDLE    -1007
+#define TY_STATUS_INVALID_COMPONENT -1008
+#define TY_STATUS_INVALID_FEATURE   -1009
+#define TY_STATUS_WRONG_TYPE        -1010
+#define TY_STATUS_WRONG_SIZE        -1011
+#define TY_STATUS_OUT_OF_MEMORY     -1012
+#define TY_STATUS_OUT_OF_RANGE      -1013
+#define TY_STATUS_TIMEOUT           -1014
+#define TY_STATUS_WRONG_MODE        -1015
+#define TY_STATUS_BUSY              -1016
+#define TY_STATUS_IDLE              -1017
+#define TY_STATUS_NO_DATA           -1018
+#define TY_STATUS_NO_BUFFER         -1019
+#define TY_STATUS_NULL_POINTER      -1020
+#define TY_STATUS_READONLY_FEATURE  -1021
+#define TY_STATUS_INVALID_DESCRIPTOR -1022
+#define TY_STATUS_INVALID_INTERFACE -1023
+#define TY_STATUS_FIRMWARE_ERROR    -1024
 
-    /* ret_code from remote device */
-    TY_STATUS_DEV_EPERM         = -1,
-    TY_STATUS_DEV_EIO           = -5,
-    TY_STATUS_DEV_ENOMEM        = -12,
-    TY_STATUS_DEV_EBUSY         = -16,
-    TY_STATUS_DEV_EINVAL        = -22,
-    /* endof ret_code from remote device */
-}TY_STATUS_LIST;
-typedef int32_t TY_STATUS;
+/* ret_code from remote device */
+#define TY_STATUS_DEV_EPERM         -1
+#define TY_STATUS_DEV_EIO           -5
+#define TY_STATUS_DEV_ENOMEM        -12
+#define TY_STATUS_DEV_EBUSY         -16
+#define TY_STATUS_DEV_EINVAL        -22
+/* endof ret_code from remote device */
 
 typedef enum TY_FW_ERRORCODE_LIST:uint32_t
 {

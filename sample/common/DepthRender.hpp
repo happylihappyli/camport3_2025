@@ -12,33 +12,33 @@ typedef unsigned short ushort;
 
 class DepthRender {
 public:
-    enum OutputColorType {
-        COLORTYPE_RAINBOW = 0,
-        COLORTYPE_BLUERED = 1,
-        COLORTYPE_GRAY = 2
+    enum class OutputColorType {
+        RAINBOW = 0,
+        BLUERED = 1,
+        GRAY = 2
     };
 
-    enum ColorRangeMode {
-        COLOR_RANGE_ABS = 0,
-        COLOR_RANGE_DYNAMIC = 1
+    enum class ColorRangeMode {
+        ABS = 0,
+        DYNAMIC = 1
     };
 
     DepthRender() : needResetColorTable(true)
-                  , color_type(COLORTYPE_BLUERED)
-                  , range_mode(COLOR_RANGE_DYNAMIC)
+                  , color_type(OutputColorType::BLUERED)
+                  , range_mode(ColorRangeMode::DYNAMIC)
                   , min_distance(0)
                   , max_distance(0)
                   , invalid_label(0)
                   {}
 
-    void SetColorType( OutputColorType ct = COLORTYPE_BLUERED ){
+    void SetColorType( OutputColorType ct = OutputColorType::BLUERED ){
                 if(ct != color_type){
                     needResetColorTable = true;
                     color_type = ct;
                 }
             }
 
-    void SetRangeMode( ColorRangeMode rm = COLOR_RANGE_DYNAMIC ){
+    void SetRangeMode( ColorRangeMode rm = ColorRangeMode::DYNAMIC ){
                 if(range_mode != rm){
                     needResetColorTable = true;
                     range_mode = rm;
@@ -58,9 +58,9 @@ public:
     funny_Mat Compute(const funny_Mat &src){
                 funny_Mat src16U;
                 // 转换为16位无符号类型
-                if(src.type() != CV_16UC1){
+                if(src.type() != static_cast<int>(PixelFormat::CV_16UC1)){
                     // TODO: 实现类型转换功能
-                    src16U.create(src.rows(), src.cols(), CV_16UC1);
+                    src16U.create(src.rows(), src.cols(), static_cast<int>(PixelFormat::CV_16UC1));
                     // 简单复制数据
                     if (src.data()) {
                         // 注意：这里假设数据可以直接复制，实际使用时需要根据类型进行转换
@@ -69,7 +69,7 @@ public:
                     }
                 } else {
                     // 复制数据
-                    src16U.create(src.rows(), src.cols(), CV_16UC1);
+                    src16U.create(src.rows(), src.cols(), static_cast<int>(PixelFormat::CV_16UC1));
                     if (src.data()) {
                         memcpy(src16U.data(), src.data(), src.rows() * src.cols() * sizeof(uint16_t));
                     }
@@ -82,9 +82,9 @@ public:
 
                 funny_Mat dst;
                 // 创建掩码
-                filtered_mask.create(src16U.rows(), src16U.cols(), CV_8UC1);
+                filtered_mask.create(src16U.rows(), src16U.cols(), static_cast<int>(PixelFormat::CV_8UC1));
                 // 创建显示图像
-                clr_disp.create(src16U.rows(), src16U.cols(), CV_16UC1);
+                clr_disp.create(src16U.rows(), src16U.cols(), static_cast<int>(PixelFormat::CV_16UC1));
                 
                 // 复制数据并生成掩码
                 if (src16U.data() && filtered_mask.data() && clr_disp.data()) {
@@ -101,9 +101,9 @@ public:
 
                 // 创建8位灰度图像
                 funny_Mat clr_8u;
-                clr_8u.create(src16U.rows(), src16U.cols(), CV_8UC1);
+                clr_8u.create(src16U.rows(), src16U.cols(), static_cast<int>(PixelFormat::CV_8UC1));
                 
-                if(COLOR_RANGE_ABS == range_mode) {
+                if(ColorRangeMode::ABS == range_mode) {
                     // 截断值
                     TruncValue(clr_disp, filtered_mask, min_distance, max_distance);
                     
@@ -152,10 +152,10 @@ public:
                 }
 
                 // 创建输出图像
-                dst.create(src16U.rows(), src16U.cols(), CV_8UC3);
+                dst.create(src16U.rows(), src16U.cols(), static_cast<int>(PixelFormat::CV_8UC3));
                 
                 switch (color_type) {
-                case COLORTYPE_GRAY:
+                case OutputColorType::GRAY:
                     // 灰度转BGR
                     if (clr_8u.data() && dst.data()) {
                         uint8_t* clr_8u_data = reinterpret_cast<uint8_t*>(clr_8u.data());
@@ -172,11 +172,11 @@ public:
                         }
                     }
                     break;
-                case COLORTYPE_BLUERED:
+                case OutputColorType::BLUERED:
                     // 使用自定义颜色映射
                     CalcColorMap(clr_8u, dst);
                     break;
-                case COLORTYPE_RAINBOW:
+                case OutputColorType::RAINBOW:
                     // 注意：由于移除了OpenCV依赖，彩虹色映射功能已简化
                     // 使用默认的灰度转彩色
                     if (clr_8u.data() && dst.data()) {
@@ -206,8 +206,8 @@ private:
                 std::vector<funny_Scalar> &table = _color_lookup_table;
                 assert(table.size() == 256);
                 assert(src.data() && dst.data());
-                assert(src.type() == CV_8UC1);
-                assert(dst.type() == CV_8UC3);
+                assert(src.type() == static_cast<int>(PixelFormat::CV_8UC1));
+                assert(dst.type() == static_cast<int>(PixelFormat::CV_8UC3));
                 
                 const unsigned char* sptr = reinterpret_cast<const unsigned char*>(src.data());
                 unsigned char* dptr = reinterpret_cast<unsigned char*>(dst.data());
@@ -245,8 +245,8 @@ private:
     void TruncValue(funny_Mat &img, funny_Mat &mask, short min_val, short max_val){
                 assert(max_val >= min_val);
                 assert(img.data() && mask.data());
-                assert(img.type() == CV_16UC1);
-                assert(mask.type() == CV_8UC1);
+                assert(img.type() == static_cast<int>(PixelFormat::CV_16UC1));
+                assert(mask.type() == static_cast<int>(PixelFormat::CV_8UC1));
                 
                 uint16_t* ptr = reinterpret_cast<uint16_t*>(img.data());
                 uint8_t* mask_ptr = reinterpret_cast<uint8_t*>(mask.data());
@@ -266,8 +266,8 @@ private:
             }
     void ClearInvalidArea(funny_Mat &clr_disp, funny_Mat &filtered_mask){
                 assert(clr_disp.data() && filtered_mask.data());
-                assert(clr_disp.type() == CV_8UC3);
-                assert(filtered_mask.type() == CV_8UC1);
+                assert(clr_disp.type() == static_cast<int>(PixelFormat::CV_8UC3));
+                assert(filtered_mask.type() == static_cast<int>(PixelFormat::CV_8UC1));
                 assert(clr_disp.rows() == filtered_mask.rows() && clr_disp.cols() == filtered_mask.cols());
                 
                 unsigned char* filter_ptr = reinterpret_cast<unsigned char*>(filtered_mask.data());

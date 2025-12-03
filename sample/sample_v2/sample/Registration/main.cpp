@@ -143,10 +143,10 @@ class RGBDRegistrationCamera : public FastCamera
 TY_STATUS RGBDRegistrationCamera::StreamInit(RegistrationParser *p, bool depth_to_color)
 {
     TY_STATUS status;
-    status = stream_enable(stream_color);
+    status = stream_enable(FastCamera::stream_idx::stream_color);
     if(status != TY_STATUS_OK) return status;
 
-    status = stream_enable(stream_depth);
+    status = stream_enable(FastCamera::stream_idx::stream_depth);
     if(status != TY_STATUS_OK) return status;
     
     TYGetFloat(handle(), TY_COMPONENT_DEPTH_CAM, TY_FLOAT_SCALE_UNIT, &p->f_depth_scale_unit);

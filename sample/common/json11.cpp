@@ -170,7 +170,7 @@ protected:
     void dump(string &out) const override { json11::dump(m_value, out); }
 };
 
-class JsonDouble final : public Value<Json::NUMBER, double> {
+class JsonDouble final : public Value<Json::Type::NUMBER, double> {
     double number_value() const override { return m_value; }
     int int_value() const override { return static_cast<int>(m_value); }
     bool equals(const JsonValue * other) const override { return m_value == other->number_value(); }
@@ -179,7 +179,7 @@ public:
     explicit JsonDouble(double value) : Value(value) {}
 };
 
-class JsonInt final : public Value<Json::NUMBER, int> {
+class JsonInt final : public Value<Json::Type::NUMBER, int> {
     double number_value() const override { return m_value; }
     int int_value() const override { return m_value; }
     bool equals(const JsonValue * other) const override { return m_value == other->number_value(); }
@@ -188,20 +188,20 @@ public:
     explicit JsonInt(int value) : Value(value) {}
 };
 
-class JsonBoolean final : public Value<Json::BOOL, bool> {
+class JsonBoolean final : public Value<Json::Type::BOOL, bool> {
     bool bool_value() const override { return m_value; }
 public:
     explicit JsonBoolean(bool value) : Value(value) {}
 };
 
-class JsonString final : public Value<Json::STRING, string> {
+class JsonString final : public Value<Json::Type::STRING, string> {
     const string &string_value() const override { return m_value; }
 public:
     explicit JsonString(const string &value) : Value(value) {}
     explicit JsonString(string &&value)      : Value(move(value)) {}
 };
 
-class JsonArray final : public Value<Json::ARRAY, Json::array> {
+class JsonArray final : public Value<Json::Type::ARRAY, Json::array> {
     const Json::array &array_items() const override { return m_value; }
     const Json & operator[](size_t i) const override;
 public:
@@ -209,7 +209,7 @@ public:
     explicit JsonArray(Json::array &&value)      : Value(move(value)) {}
 };
 
-class JsonObject final : public Value<Json::OBJECT, Json::object> {
+class JsonObject final : public Value<Json::Type::OBJECT, Json::object> {
     const Json::object &object_items() const override { return m_value; }
     const Json & operator[](const string &key) const override;
 public:
@@ -217,7 +217,7 @@ public:
     explicit JsonObject(Json::object &&value)      : Value(move(value)) {}
 };
 
-class JsonNull final : public Value<Json::NUL, NullStruct> {
+class JsonNull final : public Value<Json::Type::NUL, NullStruct> {
 public:
     JsonNull() : Value({}) {}
 };

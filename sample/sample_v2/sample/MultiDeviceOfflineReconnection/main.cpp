@@ -146,8 +146,8 @@ int main(int argc, char* argv[])
         cams[i].RegisterDeviceInitCallback([](OfflineDetectCamera* cam) {
             //Device init code
             //The initialization Settings of the camera are written here.
-            cam->stream_enable(FastCamera::stream_depth);
-            cam->stream_enable(FastCamera::stream_color);
+            cam->stream_enable(FastCamera::stream_idx::stream_depth);
+             cam->stream_enable(FastCamera::stream_idx::stream_color);
 
         },  &cams[i]);
     }

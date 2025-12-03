@@ -28,7 +28,7 @@ class TofCamera : public FastCamera
 TY_STATUS TofCamera::Init()
 {
     TY_STATUS status;
-    status = stream_enable(stream_depth);
+    status = stream_enable(FastCamera::stream_idx::stream_depth);
     if(status != TY_STATUS_OK) return status;
     
     TYGetFloat(handle(), TY_COMPONENT_DEPTH_CAM, TY_FLOAT_SCALE_UNIT, &f_depth_scale_unit);

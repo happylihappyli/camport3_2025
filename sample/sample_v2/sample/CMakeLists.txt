@@ -35,7 +35,7 @@ endif()
 if (NOT TARGET tycam) 
     #only build samples 
     option (OpenCV_STATIC OFF)
-    set(INCLUDE_PATH ../include)
+    set(INCLUDE_PATH ../../include)
     include_directories(${INCLUDE_PATH})
     set(ABSOLUTE_TYCAM_LIB tycam)
     add_library(${ABSOLUTE_TYCAM_LIB} SHARED IMPORTED)

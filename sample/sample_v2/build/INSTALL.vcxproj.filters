@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="E:\github\camport3_2025\sample\sample_v2\build\CMakeFiles\25b482ea251d5ccdbfaf6617ea6d81b0\INSTALL_force.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{0E002E9E-408D-3F68-B346-44B1A0342E27}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

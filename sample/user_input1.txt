@@ -1,0 +1,24 @@
+用户编程提示：
+1. 对话语言最好中文，如果中文不行就英文
+2. 系统为windows 11
+3. 请在生成代码时添加函数级注释，注释尽量给中文，调试信息也一样
+4. 扩展名为cpp或者h文件里如果有中文，一定要把编码设置为 utf8+BOM，shelll,cmd脚本如果用中文，要用gb2312编码
+5. 在PowerShell中，&&不是有效的语句分隔符 powershell命令分割符号是分号;
+6. shelll,cmd 脚本 结尾不要pause，这样，不需要人工确认，尽量用python脚本代替cmd和shell脚本
+7. godot 4.4 gdscript里面没有try和catch语句
+8. godot 4.4 路径 D:\Code\Godot_v4.4.1\Godot_v4.4.1-stable_win64.exe
+10. GDScript里class_name是关键字
+12. 尽量使用c++23 的import 代替 include, 不能使用的地方还是用include
+13. 一个cpp文件如果太长，可以分成多个cpp文件
+14. 编译失败了，错误信息显示'拒绝访问'（Access denied）等待用户提示，因为可能用户正在使用软件
+15. powershell默认编码改成utf8
+16. 编译或运行，开始和结束的时候，scons脚本要显示一下时间
+17. 开头的版权声明都删除，减少程序大小
+18. 每次修改程序，修改完毕，用python的TTS播放语音提示，比如，任务运行完毕，过来看看！
+19. 用scons编译c++项目，scons编译要设置为utf-8选项
+20. vs2022路径 D:\Code\VS2022\Community
+21. 编译用scons编译
+22. 编译后的exe放到bin目录，编译中产生的obj放到obj目录
+23. 多用前向声明，少要用include，因为include会导致编译时间变长，并且会增加编译后的程序大小
+24. 我将给你一系列相互关联的任务，请确保每个解决方案与之前的决策保持一致。
+25. 我的编程提示要自动保存到一个文件里比如,user_input1.txt 等，如果有新的会话，就用user_input2.txt 等，这样我可以方便地查看和管理我的编程提示。

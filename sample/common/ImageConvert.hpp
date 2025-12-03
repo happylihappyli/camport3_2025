@@ -13,7 +13,7 @@ static inline bool imdecode(const std::vector<uint8_t>& buf, int flags, funny_Ma
     // 为了编译通过，这里创建一个小的默认图像
     int width = 640;
     int height = 480;
-    dst = funny_Mat(height, width, CV_8UC3);
+    dst = funny_Mat(height, width, static_cast<int>(PixelFormat::CV_8UC3));
     
     // 填充一些简单的测试数据
     uint8_t* data = dst.data();
@@ -32,18 +32,18 @@ static inline bool imdecode(const std::vector<uint8_t>& buf, int flags, funny_Ma
 // 简化版cvtColor函数实现
 static inline void cvtColor(const funny_Mat& src, funny_Mat& dst, int code) {
     // 确保源图像是正确的格式
-    if (src.type() != CV_8UC2) {
+    if (src.type() != static_cast<int>(PixelFormat::CV_8UC2)) {
         std::cout << "错误: cvtColor - 源图像必须是CV_8UC2格式" << std::endl;
         return;
     }
     
     // 创建目标图像
-    dst = funny_Mat(src.rows(), src.cols(), CV_8UC3);
+    dst = funny_Mat(src.rows(), src.cols(), static_cast<int>(PixelFormat::CV_8UC3));
     
     const uint8_t* src_data = src.data();
     uint8_t* dst_data = dst.data();
     
-    if (code == COLOR_YUV2BGR_YVYU) {
+    if (code == static_cast<int>(ColorConversionCode::YUV2BGR_YVYU)) {
         // YVYU格式到BGR的转换
         for (int i = 0; i < src.rows() * src.cols(); i++) {
             int src_idx = i * 2;
@@ -72,7 +72,7 @@ static inline void cvtColor(const funny_Mat& src, funny_Mat& dst, int code) {
             dst_data[dst_idx + 1] = (G < 0) ? 0 : ((G > 255) ? 255 : G);
             dst_data[dst_idx + 2] = (R < 0) ? 0 : ((R > 255) ? 255 : R);
         }
-    } else if (code == COLOR_YUV2BGR_YUYV) {
+    } else if (code == static_cast<int>(ColorConversionCode::YUV2BGR_YUYV)) {
         // YUYV格式到BGR的转换
         for (int i = 0; i < src.rows() * src.cols(); i++) {
             int src_idx = i * 2;

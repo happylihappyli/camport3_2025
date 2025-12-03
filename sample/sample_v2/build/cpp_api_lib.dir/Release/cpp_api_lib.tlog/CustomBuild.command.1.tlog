@@ -1,0 +1,10 @@
+^E:\GITHUB\CAMPORT3_2025\SAMPLE\SAMPLE_V2\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SE:/github/camport3_2025/sample/sample_v2 -BE:/github/camport3_2025/sample/sample_v2/build --check-stamp-file E:/github/camport3_2025/sample/sample_v2/build/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

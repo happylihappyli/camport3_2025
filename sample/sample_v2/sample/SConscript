@@ -76,9 +76,8 @@ if to_bool(env.get('BUILD_SAMPLE_V2_WITH_OPENCV', '0')):
 sample_v2_cpp_path = os.path.abspath(os.path.join(current_dir, '..', 'cpp'))
 common_dir = os.path.abspath(os.path.join(current_dir, '..', '..', 'common'))
 core_sources = [
-    os.path.join(sample_v2_cpp_path, 'Device.cpp'),
-    os.path.join(sample_v2_cpp_path, 'Frame.cpp'),
-    os.path.join(common_dir, 'funny_resize.cpp')
+    os.path.join(sample_v2_cpp_path, 'Frame.cpp')
+    # 注意：不再包含funny_resize.cpp，因为它已经在common_lib.lib中
 ]
 
 # 确保源文件存在
@@ -119,6 +118,12 @@ for sample in ALL_CPP_API_SAMPLES:
             # 过滤源文件列表
             sample_sources = [src for src in sample_sources if not any(exclude in str(src) for exclude in exclude_files)]
         
+        # 添加FastCamera对象文件（从SConstruct中获取）- 放在最前面确保链接顺序正确
+        if 'FASTERCAMERA_OBJ' in env and env['FASTERCAMERA_OBJ']:
+            # 将FastCamera的obj文件添加到源文件列表的最前面
+            sample_sources = list(env['FASTERCAMERA_OBJ']) + sample_sources
+            print("Added FastCamera object to %s" % sample_exec)
+        
         # 添加核心源文件到每个示例的源文件列表
         sample_sources.extend(core_sources)
         
@@ -135,6 +140,23 @@ for sample in ALL_CPP_API_SAMPLES:
             if 'common_lib' not in sample_env['LIBS']:
                 sample_env.Append(LIBS=['common_lib'])
                 print("Added common_lib to LIBS")
+            
+            # 如果是PointCloud示例，禁用OpenCV依赖
+            if sample_dir == 'PointCloud':
+                # 添加预处理器定义，启用独立程序的main函数
+                sample_env.Append(CPPDEFINES=['STANDALONE_POINT_CLOUD'])
+                
+                # 移除可能存在的OpenCV相关定义和库
+                if 'OPENCV_DEPENDENCIES' in sample_env.get('CPPDEFINES', []):
+                    if isinstance(sample_env['CPPDEFINES'], list):
+                        sample_env['CPPDEFINES'].remove('OPENCV_DEPENDENCIES')
+                    elif isinstance(sample_env['CPPDEFINES'], dict):
+                        del sample_env['CPPDEFINES']['OPENCV_DEPENDENCIES']
+                
+                # 确保只链接必要的库，移除OpenCV库
+                sample_env['LIBS'] = [lib for lib in sample_env['LIBS'] if not lib.startswith('opencv_')]
+                print("Disabled OpenCV dependency for PointCloud example")
+            
             # 创建程序，确保链接到common_lib
             program = sample_env.Program(target=target_path, source=sample_sources)
             

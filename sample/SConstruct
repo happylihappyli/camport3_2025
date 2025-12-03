@@ -4,133 +4,12 @@ from os.path import join, abspath, exists
 from SCons.Script import *
 import time
 import re
-import os
+import subprocess
 
 # 全局编译统计信息
 build_start_time = time.time()
 compile_errors = 0
 compile_warnings = 0
-
-# 自定义构建器，用于捕获编译错误
-import subprocess
-import sys
-import os
-
-def build_with_error_tracking(env):
-    # 保存原始的Program方法
-    original_program = env.Program
-    
-    # 创建一个函数来执行构建命令并捕获输出
-    def capture_build_output(cmd):
-        global compile_errors, compile_warnings
-        
-        try:
-            # 执行命令并捕获输出
-            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-            output = result.stdout
-            
-            # 解析输出中的错误和警告
-            errors = re.findall(r'error|致命错误', output, re.IGNORECASE)
-            warnings = re.findall(r'warning', output, re.IGNORECASE)
-            
-            compile_errors += len(errors)
-            compile_warnings += len(warnings)
-            
-            return result.returncode, output
-        except Exception as e:
-            compile_errors += 1
-            return 1, f"Error executing command: {e}"
-    
-    # 创建一个更简单的包装器来跟踪构建状态
-    def wrapped_program(*args, **kwargs):
-        global compile_errors
-        try:
-            result = original_program(*args, **kwargs)
-            return result
-        except Exception as e:
-            compile_errors += 1
-            print(f"Program build error: {e}")
-            return None
-    
-    # 替换Program方法
-    env.Program = wrapped_program
-    
-    return env
-
-# 在构建开始前清除之前的错误计数
-def reset_compile_stats():
-    global compile_errors, compile_warnings
-    compile_errors = 0
-    compile_warnings = 0
-
-# 初始化编译统计
-reset_compile_stats()
-
-# 输出编译总结
-def print_compile_summary():
-    global compile_errors, compile_warnings
-    build_end_time = time.time()
-    elapsed_time = build_end_time - build_start_time
-    
-    print("\n" + "=" * 80)
-    print("                    Camport3 编译总结                    ")
-    print("=" * 80)
-    print(f"编译耗时: {elapsed_time:.2f} 秒")
-    
-    # 检查是否有成功编译的可执行文件
-    bin_dir = os.path.abspath('bin')
-    sample_v1_exes = []
-    sample_v2_exes = []
-    if os.path.exists(bin_dir):
-        executables = [f for f in os.listdir(bin_dir) if f.endswith('.exe')]
-        sample_v1_exes = [f for f in executables if not f.endswith('_v2.exe')]
-        sample_v2_exes = [f for f in executables if f.endswith('_v2.exe')]
-        
-        print(f"\n成功编译的可执行文件:")
-        print(f"Sample_v1 可执行文件数量: {len(sample_v1_exes)}")
-        for exe in sample_v1_exes:
-            print(f"  - {exe}")
-            
-        print(f"Sample_v2 可执行文件数量: {len(sample_v2_exes)}")
-        for exe in sample_v2_exes:  # 只显示前5个sample_v2可执行文件
-            print(f"  - {exe}")
-    
-    # 尝试直接检测是否有编译错误
-    try:
-        # 检查最近的构建日志文件
-        if os.path.exists('.sconsign.dblite'):
-            # 使用scons -n命令查看构建过程，这不会实际构建，但可以显示命令
-            try:
-                build_log = subprocess.check_output(['scons', '-n'], stderr=subprocess.STDOUT, universal_newlines=True)
-                errors_in_log = re.findall(r'error|致命错误', build_log, re.IGNORECASE)
-                if errors_in_log:
-                    compile_errors += len(errors_in_log)
-            except:
-                pass
-        
-        # 检查系统环境中是否有SCONS_ERROR变量
-        if 'SCONS_ERROR' in os.environ:
-            try:
-                compile_errors += int(os.environ.get('SCONS_ERROR', '0'))
-            except:
-                pass
-            
-    except Exception as e:
-        print(f"Error checking build status: {e}")
-    
-    # 显示编译错误和警告统计
-    print(f"\n编译统计:")
-    print(f"编译错误数量: {compile_errors}")
-    print(f"编译警告数量: {compile_warnings}")
-    
-    # 判断编译状态 - 更直接的方法是检查是否有编译错误记录
-    success = compile_errors == 0
-    
-    print(f"编译状态: {'成功' if success else '失败'}")
-    
-    print("=" * 80)
-    print("编译总结已完成。")
-    print("=" * 80)
 
 # ==============================================================================
 # Camport3项目构建配置总结
@@ -141,9 +20,10 @@ def print_compile_summary():
 #   - 主要依赖：tycam库、common_lib（项目内部公共库）
 #   - 注意事项：当前配置不包含OpenCV依赖，使用非OpenCV实现路径
 #   - 支持平台：当前专注于Windows x64平台
+#   - FastCamera类实现：从BV_WorkSpace项目引用并编译
 # ==============================================================================
 
-print("Using simplified SConstruct for troubleshooting OpenCV linking issues")
+print("使用简化版SConstruct配置文件解决链接问题")
 
 # 设置构建选项
 opts = Variables()
@@ -156,66 +36,97 @@ opts.Add('BUILD_SAMPLE_V2', 'Enable sample v2 build', '1')
 # 创建统一的bin目录，用于存放所有可执行文件
 bin_dir = os.path.abspath('bin')
 if not os.path.exists(bin_dir):
-    os.makedirs(bin_dir)    # 创建bin目录
+    os.makedirs(bin_dir)    
     print(f"Created bin directory: {bin_dir}")
 
 # 创建obj目录，用于存放所有目标文件
-obj_dir = os.path.abspath('obj')
-# 按照用户要求，将obj文件放到E:\github\camport3_2025\sample\obj目录
 obj_dir = "E:\\github\\camport3_2025\\sample\\obj"
 if not os.path.exists(obj_dir):
     os.makedirs(obj_dir)
     print(f"Created obj directory: {obj_dir}")
 
+# 配置使用Clang编译器
 env = Environment(variables=opts)
 
-# 为了防止不同示例的obj文件命名冲突，我们使用不同的子目录
-# 这里我们不直接设置OBJPREFIX，而是在每个子环境中设置不同的路径
-# 主环境的obj文件直接放在obj_dir下
+# 设置Clang编译器路径 - 使用系统安装的Clang
+if sys.platform == 'win32':
+    # 使用系统安装的clang-cl
+    clang_cl_path = r"C:\Program Files\LLVM\bin\clang-cl.exe"
+    if os.path.exists(clang_cl_path):
+        env['CC'] = '"' + clang_cl_path + '"'
+        env['CXX'] = '"' + clang_cl_path + '"'
+        env['AR'] = r'"C:\Program Files\LLVM\bin\llvm-lib.exe"'
+        env['LINK'] = r'"C:\Program Files\LLVM\bin\lld-link.exe"'
+        
+        # Clang编译选项
+        env.Append(CXXFLAGS=['/std:c++17', '/Wall'])
+        env.Append(CPPDEFINES=['_WIN32'])
+        
+        print(f"使用系统Clang编译器: {clang_cl_path}")
+    else:
+        # 尝试使用LLVM目录下的clang
+        llvm_clang_path = r"C:\Program Files (x86)\LLVM\bin\clang-cl.exe"
+        if os.path.exists(llvm_clang_path):
+            env['CC'] = '"' + llvm_clang_path + '"'
+            env['CXX'] = '"' + llvm_clang_path + '"'
+            env['AR'] = r'"C:\Program Files (x86)\LLVM\bin\llvm-lib.exe"'
+            env['LINK'] = r'"C:\\Program Files (x86)\\LLVM\\bin\\lld-link.exe"'
+            
+            # Clang编译选项
+            env.Append(CXXFLAGS=['/std:c++17', '/Wall'])
+            env.Append(CPPDEFINES=['_WIN32'])
+            
+            print(f"使用系统LLVM Clang编译器: {llvm_clang_path}")
+        else:
+            print("警告: 未找到clang-cl.exe，使用MSVC编译器但配置Clang兼容选项")
+            # 使用MSVC但配置为Clang兼容模式
+            env.Append(CXXFLAGS=['/std:c++17'])
 
 # 设置基本路径
-LIB_ROOT_PATH = abspath('../lib/win/hostapp/')
+LIB_ROOT_PATH = 'E:/github/BV_WorkSpace'  
 INCLUDE_PATH = abspath('../include/')
 COMMON_DIR = abspath('./common/')
 
-# 平台特定配置 - 只关注Windows平台
+# Windows配置
 if sys.platform == 'win32':
-    # Windows配置
+    # 基本路径配置 - 只使用camport3的include，避免重复包含BV_WorkSpace的头文件
     env.Append(CPPPATH=[INCLUDE_PATH, COMMON_DIR])
-    
-    # 定义WIN32宏
     env.Append(CPPDEFINES=['WIN32'])
-    
-    # 添加编译选项
-    env.Append(CXXFLAGS=['/EHsc'])
+    # 移除MSVC特有的/EHsc选项，使用Clang兼容选项
+    # env.Append(CXXFLAGS=['/EHsc'])
 
-    # 架构选择
+    # 不需要freeglut include目录（使用简化版本）
+
+    # 库路径配置
     lib_arch = 'x64'  # 使用64位架构
-    lib_path = join(LIB_ROOT_PATH, lib_arch)
-    env.Append(LIBPATH=[lib_path])
+    lib_paths = [
+        'E:/github/BV_WorkSpace/bin',    # BV_WorkSpace的bin目录（包含tycam.lib）
+        'E:/github/BV_WorkSpace/lib',    # BV_WorkSpace的lib目录
+        join(LIB_ROOT_PATH, lib_arch),  # 原始路径
+        abspath('./'),                 # 当前目录（包含common_lib.lib）
+        abspath('./bin'),              # bin目录（包含tycam.lib）
+    ]
+    env.Append(LIBPATH=lib_paths)
     
     # 添加基本库
     env.Append(LIBS=['tycam'])
     
-    # 配置OpenCV依赖
-    opencv_dir = env.get('OPENCV_DIR', '')
-    if opencv_dir and os.path.exists(opencv_dir):
-        print(f"Building with OpenCV support from {opencv_dir}")
-        # 添加OpenCV头文件路径
-        env.Append(CPPPATH=[join(opencv_dir, 'build', 'include')])
-        # 添加OpenCV库路径
-        env.Append(LIBPATH=[join(opencv_dir, 'build', 'x64', 'vc15', 'lib')])
-        # 添加OpenCV库文件（只添加Release版本）
-        env.Append(LIBS=['opencv_world347'])
-        # 确保OpenCV库在链接顺序中的位置正确
-        env.Prepend(LIBS=['opencv_world347'])
-        # 定义OPENCV_DEPENDENCIES宏，启用OpenCV相关代码
-        env.Append(CPPDEFINES=['OPENCV_DEPENDENCIES'])
-    else:
-        print("Building without OpenCV dependency")
+    # 添加OpenGL相关库和Windows API库
+    env.Append(LIBS=['opengl32', 'glu32', 'user32', 'gdi32', 'kernel32'])
+    
+    # Clang链接选项 - Windows下使用lld-link
+    env.Append(LINKFLAGS=['/MANIFEST'])
 
-# 启用编译错误和警告跟踪
-env = build_with_error_tracking(env)
+# 定义cloud_viewer源文件 - 使用简化版本，不依赖freeglut
+cloud_viewer_sources = [
+    join('./cloud_viewer', 'cloud_viewer_simple.cpp'),
+]
+
+# 构建cloud_viewer库
+cloud_viewer_env = env.Clone()
+cloud_viewer_env['OBJPREFIX'] = os.path.join(obj_dir, 'cloud_viewer_')
+cloud_viewer_lib = cloud_viewer_env.Library('cloud_viewer', cloud_viewer_sources)
+env.Append(LIBS=['cloud_viewer'])
 
 # 定义common源文件
 common_sources = [
@@ -230,46 +141,93 @@ common_sources = [
     join(COMMON_DIR, 'funny_resize.cpp'),
 ]
 
-# 为common_lib创建专用环境，不包含任何OpenCV依赖
+# 构建common_lib
 common_env = env.Clone()
-# 确保common_lib的obj文件也放到指定目录
 common_env['OBJPREFIX'] = os.path.join(obj_dir, 'common_')
-
-# 确保common_lib不依赖任何OpenCV库
 common_lib = common_env.Library('common_lib', common_sources)
-
-# 明确将common_lib添加到环境的LIBS中，确保链接时可以找到
 env.Append(LIBS=['common_lib'])
 
-# 先构建common_lib，再构建示例程序
-export_libs = {'env': env, 'bin_dir': bin_dir, 'common_lib': common_lib}
-SConscript('sample_v1/SConscript', exports=export_libs)
+# 使用修复后的FastCamera实现
+print("使用修复后的FastCamera实现（移除异常处理）...")
+fastcamera_source = 'E:/github/camport3_2025/sample/device_fix.cpp'
+fastcamera_header = 'E:/github/camport3_2025/sample/device_fix.hpp'
 
-# 编译sample_v2示例目录 - 暂时禁用
-if env.get('BUILD_SAMPLE_V2', '0') == '1':
-    print("开始编译sample_v2目录")
-    # 为sample_v2创建专用环境
-    sample_v2_env = env.Clone()
-    # 确保sample_v2_env的obj文件也放到指定目录，使用前缀避免冲突
-    sample_v2_env['OBJPREFIX'] = os.path.join(obj_dir, 'sample_v2_')
-    # 确保sample_v2_env包含common_lib
-    if 'common_lib' not in sample_v2_env['LIBS']:
-        sample_v2_env.Append(LIBS=['common_lib'])
-
-    if opencv_dir and os.path.exists(opencv_dir):
-        # 如果OpenCV路径有效，设置BUILD_SAMPLE_V2_WITH_OPENCV标志为1启用OpenCV支持
-        print("启用sample_v2的OpenCV支持")
-        sample_v2_env['BUILD_SAMPLE_V2_WITH_OPENCV'] = '1'
-    else:
-        print("sample_v2不使用OpenCV")
-
-    # 传递克隆的环境和common_lib
-    SConscript('sample_v2/sample/SConscript', exports={'env': sample_v2_env, 'bin_dir': bin_dir, 'common_lib': common_lib})
+# 检查修复后的FastCamera源文件是否存在
+if os.path.exists(fastcamera_source) and os.path.exists(fastcamera_header):
+    print("找到修复后的FastCamera实现文件，添加到构建...")
+    
+    # 编译修复后的FastCamera源文件为obj文件
+    fastcamera_env = env.Clone()
+    fastcamera_include_path = os.path.dirname(fastcamera_header)
+    fastcamera_env.Append(CPPPATH=[fastcamera_include_path])
+    
+    fastcamera_obj = fastcamera_env.Object(source=fastcamera_source, OBJPREFIX=os.path.join(obj_dir, 'fastcamera_'))
+    
+    print(f"修复后的FastCamera source: {fastcamera_source}")
+    print(f"修复后的FastCamera header: {fastcamera_header}")
+    print(f"修复后的FastCamera object: {fastcamera_obj}")
+    
+    # 将修复后的FastCamera对象添加到环境变量中，供后续的链接使用
+    env['FASTERCAMERA_OBJ'] = fastcamera_obj
 else:
-    print("sample_v2构建已禁用")
+    print(f"警告: 找不到修复后的FastCamera实现文件，尝试使用原始文件...")
+    # 如果修复文件不存在，回退到原始文件
+    original_source = 'E:/github/BV_WorkSpace/thirdparty/ty_sdk/src/Device.cpp'
+    original_header = 'E:/github/BV_WorkSpace/thirdparty/ty_sdk/include/Device.hpp'
+    
+    if os.path.exists(original_source) and os.path.exists(original_header):
+        print("使用原始FastCamera实现文件...")
+        
+        fastcamera_env = env.Clone()
+        fastcamera_include_path = os.path.dirname(original_header)
+        fastcamera_env.Append(CPPPATH=[fastcamera_include_path])
+        
+        fastcamera_obj = fastcamera_env.Object(source=original_source, OBJPREFIX=os.path.join(obj_dir, 'fastcamera_'))
+        
+        env['FASTERCAMERA_OBJ'] = fastcamera_obj
+    else:
+        print(f"错误: 找不到任何FastCamera实现文件!")
+        env['FASTERCAMERA_OBJ'] = None
 
-print("Simplified SConstruct configuration completed.")
-print("end compile")
-# # 在SCons构建结束时调用编译总结函数
-# import atexit
-# atexit.register(print_compile_summary)
+# 配置OpenCV依赖 - 完全禁用OpenCV
+print("完全禁用OpenCV依赖进行构建")
+# 确保不包含任何OpenCV相关路径和库
+if 'opencv_world347' in env.get('LIBS', []):
+    while 'opencv_world347' in env['LIBS']:
+        env['LIBS'].remove('opencv_world347')
+    print("移除opencv_world347库")
+
+# 清理可能的OpenCV路径
+env['CPPPATH'] = [p for p in env.get('CPPPATH', []) if 'opencv' not in p.lower()]
+env['LIBPATH'] = [p for p in env.get('LIBPATH', []) if 'opencv' not in p.lower()]
+
+# 确保不定义OpenCV相关宏
+if 'OPENCV_DEPENDENCIES' in env.get('CPPDEFINES', []):
+    if isinstance(env['CPPDEFINES'], list):
+        env['CPPDEFINES'].remove('OPENCV_DEPENDENCIES')
+    elif isinstance(env['CPPDEFINES'], dict):
+        del env['CPPDEFINES']['OPENCV_DEPENDENCIES']
+
+print("OpenCV依赖已完全禁用")
+
+# 构建示例程序
+print("构建示例程序...")
+
+# 构建sample_v1
+build_sample_v1 = env.get('BUILD_SAMPLE_V1', '1')
+if build_sample_v1 == '1':
+    print("Building sample_v1...")
+    SConscript('sample_v1/SConscript', exports={'env': env, 'bin_dir': bin_dir, 'common_lib': common_lib})
+
+# 构建sample_v2
+build_sample_v2 = env.get('BUILD_SAMPLE_V2', '1')
+if build_sample_v2 == '1':
+    print("Building sample_v2...")
+    SConscript('sample_v2/sample/SConscript', exports={'env': env, 'bin_dir': bin_dir, 'common_lib': common_lib})
+
+print("SConstruct配置完成。")
+print("编译结束")
+
+build_end_time = time.time()
+elapsed_time = build_end_time - build_start_time
+print(f"编译总耗时: {elapsed_time:.2f} 秒")

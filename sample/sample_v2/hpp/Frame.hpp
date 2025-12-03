@@ -1,7 +1,7 @@
 #pragma once
 
 #include <memory>
-
+#include <map>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -17,7 +17,7 @@ class TYImage
     TYImage();
     TYImage(const TY_IMAGE_DATA& image);
     TYImage(const TYImage& src);
-    TYImage(int32_t width, int32_t height, TY_COMPONENT_ID compID, TY_PIXEL_FORMAT format, int32_t size);
+    TYImage(int32_t width, int32_t height, TY_COMPONENT_ID compID, TY_PIXEL_FORMAT_LIST format, int32_t size);
 
     ~TYImage();
 

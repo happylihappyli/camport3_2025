@@ -52,7 +52,7 @@ int main(int argc, char* argv[])
         }
     }, &process_exit);
 
-    if(TY_STATUS_OK != camera.stream_enable(FastCamera::stream_depth)) {
+    if(TY_STATUS_OK != camera.stream_enable(FastCamera::stream_idx::stream_depth)) {
         std::cout << "depth stream enable failed!" << std::endl;
         return -1;
     }
@@ -72,3 +72,4 @@ int main(int argc, char* argv[])
     std::cout << "Main done!" << std::endl;
     return 0;
 }
+

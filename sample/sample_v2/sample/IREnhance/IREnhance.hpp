@@ -262,3 +262,4 @@ static int GetAllEnhancers(std::vector<std::shared_ptr<IREnhanceProcesser>> &enh
     enhancers.push_back(std::shared_ptr<IREnhanceProcesser>(new NoLinearStretchHistProcesser()));
     return 0;
 }
+

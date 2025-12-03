@@ -19,18 +19,18 @@ TY_STATUS StreamAsyncCamera::Init(bool color_en, bool depth_en, bool ir_en, bool
     streams = 0;
     ASSERT_OK( TYGetComponentIDs(handle(), &allComps) );
     if(allComps & TY_COMPONENT_RGB_CAM  && color_en) {
-        streams |= FastCamera::stream_color;
-        stream_enable(FastCamera::stream_color);
+        streams |= FastCamera::stream_idx::stream_color;
+        stream_enable(FastCamera::stream_idx::stream_color);
     }
     
     if (depth_en) {
-        streams |= FastCamera::stream_depth;
-        stream_enable(FastCamera::stream_depth);
+        streams |= FastCamera::stream_idx::stream_depth;
+        stream_enable(FastCamera::stream_idx::stream_depth);
     }
 
     if (ir_en) {
-        streams |= FastCamera::stream_ir_left;
-        stream_enable(FastCamera::stream_ir_left);
+        streams |= FastCamera::stream_idx::stream_ir_left;
+        stream_enable(FastCamera::stream_idx::stream_ir_left);
     }
 
     TY_TRIGGER_PARAM trigger;
@@ -132,21 +132,21 @@ int main(int argc, char* argv[])
             if(color) {
                 void *  image_pos  = color->buffer();
                 int32_t image_size = color->height() * TYPixelLineSize(color->width(), color->pixelFormat());
-                stream_expect &= ~FastCamera::stream_color;
+                stream_expect &= ~FastCamera::stream_idx::stream_color;
                 std::cout << "===   Image (RGB   , " <<  color->timestamp() << ", " << image_pos << ", "<<  image_size << ")" << std::endl;
             }
 
             if(depth) {
                 void *  image_pos  = depth->buffer();
                 int32_t image_size = depth->height() * TYPixelLineSize(depth->width(), depth->pixelFormat());
-                stream_expect &= ~FastCamera::stream_depth;
+                stream_expect &= ~FastCamera::stream_idx::stream_depth;
                 std::cout << "===   Image (DEPTH   , " <<  depth->timestamp() << ", " << image_pos << ", "<<  image_size << ")" << std::endl;
             }
 
             if(ir) {
                 void *  image_pos  = ir->buffer();
                 int32_t image_size = ir->height() * TYPixelLineSize(ir->width(), ir->pixelFormat());
-                stream_expect &= ~FastCamera::stream_ir_left;
+                stream_expect &= ~FastCamera::stream_idx::stream_ir_left;
                 std::cout << "===   Image (LEFT_IR   , " <<  ir->timestamp() << ", " << image_pos << ", "<<  image_size << ")" << std::endl;
             }
 

@@ -1,0 +1,10 @@
+^E:\GITHUB\CAMPORT3_2025\SAMPLE\SAMPLE_V2\BUILD\CMAKEFILES\25B482EA251D5CCDBFAF6617EA6D81B0\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SE:/github/camport3_2025/sample/sample_v2 -BE:/github/camport3_2025/sample/sample_v2/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file E:/github/camport3_2025/sample/sample_v2/build/Project.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

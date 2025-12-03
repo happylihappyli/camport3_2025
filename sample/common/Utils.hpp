@@ -20,6 +20,14 @@
 #include "ParametersParse.h"
 #include "huffman.h"
 
+// 添加缺失的状态码定义
+#ifndef TY_STATUS_OK
+#define TY_STATUS_OK 0
+#endif
+#ifndef TY_STATUS_ERROR
+#define TY_STATUS_ERROR -1001
+#endif
+
 #ifndef ASSERT
 #define ASSERT(x)   do{ \
                 if(!(x)) { \
@@ -33,7 +41,7 @@
 #ifndef ASSERT_OK
 #define ASSERT_OK(x)    do{ \
                 int err = (x); \
-                if(err != TY_STATUS_OK) { \
+                if(err != 0) { \
                     LOGE("Assert failed: error %d(%s) at %s:%d", err, TYErrorString(err), __FILE__, __LINE__); \
                     LOGE("    : " #x ); \
                     abort(); \
@@ -44,7 +52,7 @@
 #ifndef CHECK_RET 
 #define CHECK_RET(x)    do{ \
                 int err = (x); \
-                if(err != TY_STATUS_OK) { \
+                if(err != 0) { \
                     LOGD(#x " failed: error %d(%s)", err, TYErrorString(err)); \
                     LOGD("at %s:%d", __FILE__, __LINE__); \
                 } \

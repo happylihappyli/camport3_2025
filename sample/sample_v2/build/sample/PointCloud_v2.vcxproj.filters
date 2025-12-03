@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="E:\github\camport3_2025\sample\sample_v2\sample\PointCloud\BasicCameraTest.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\github\camport3_2025\sample\sample_v2\sample\PointCloud\CorrectInterfaceTest.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\github\camport3_2025\sample\sample_v2\sample\PointCloud\InterfaceTest.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\github\camport3_2025\sample\sample_v2\sample\PointCloud\ListInterfacesTest.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\github\camport3_2025\sample\sample_v2\sample\PointCloud\MinimalPointCloud.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\github\camport3_2025\sample\sample_v2\sample\PointCloud\MinimalTYTest.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\github\camport3_2025\sample\sample_v2\sample\PointCloud\PointCloud_NoCV.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\github\camport3_2025\sample\sample_v2\sample\PointCloud\SimpleCameraTest.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\github\camport3_2025\sample\sample_v2\sample\PointCloud\SimpleDeviceEnumeration.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\github\camport3_2025\sample\sample_v2\sample\PointCloud\SimpleDeviceTest.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\github\camport3_2025\sample\sample_v2\sample\PointCloud\SimpleTYTest.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\github\camport3_2025\sample\sample_v2\sample\PointCloud\TestStdio.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\github\camport3_2025\sample\sample_v2\sample\PointCloud\VerySimpleTest.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\github\camport3_2025\sample\sample_v2\sample\PointCloud\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="E:\github\camport3_2025\sample\sample_v2\sample\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{E4CD1F5F-04A1-37C0-A521-50B93821D7C8}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

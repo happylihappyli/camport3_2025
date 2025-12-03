@@ -36,7 +36,7 @@ void DepthInpainter::inpaint(const funny_Mat& inputDepth, funny_Mat& out, const 
     
     // 复制有效深度值
     // 注意：这里实现的是简化版，仅处理16位无符号深度图像
-    if (inputDepth.type() == CV_16UC1 && validMask.type() == CV_8UC1) {
+    if (inputDepth.type() == static_cast<int>(PixelFormat::CV_16UC1) && validMask.type() == static_cast<int>(PixelFormat::CV_8UC1)) {
         uint16_t* depthData = reinterpret_cast<uint16_t*>(const_cast<uint8_t*>(inputDepth.data()));
         uint16_t* validDepthData = reinterpret_cast<uint16_t*>(validDepth.data());
         uint8_t* maskData = reinterpret_cast<uint8_t*>(validMask.data());
@@ -58,7 +58,7 @@ void DepthInpainter::inpaint(const funny_Mat& inputDepth, funny_Mat& out, const 
     // 注意：这是一个非常简化的实现，真实的修复算法需要更复杂的计算
     
     // 简单复制有效深度到输出
-    if (validDepth.type() == CV_16UC1 && out.type() == CV_16UC1) {
+    if (validDepth.type() == static_cast<int>(PixelFormat::CV_16UC1) && out.type() == static_cast<int>(PixelFormat::CV_16UC1)) {
         uint16_t* validDepthData = reinterpret_cast<uint16_t*>(validDepth.data());
         uint16_t* outData = reinterpret_cast<uint16_t*>(out.data());
         int totalPixels = validDepth.rows() * validDepth.cols();
@@ -70,7 +70,7 @@ void DepthInpainter::inpaint(const funny_Mat& inputDepth, funny_Mat& out, const 
 
     // 实现简单的邻域填充修复
     // 注意：这是一个简化的实现，仅使用8邻域的平均值填充
-    if (out.type() == CV_16UC1) {
+    if (out.type() == static_cast<int>(PixelFormat::CV_16UC1)) {
         uint16_t* outData = reinterpret_cast<uint16_t*>(out.data());
         int rows = out.rows();
         int cols = out.cols();
@@ -117,10 +117,10 @@ void DepthInpainter::inpaint(const funny_Mat& inputDepth, funny_Mat& out, const 
 funny_Mat DepthInpainter::genValidMask(const funny_Mat& depth)
 {
     funny_Mat validMask;
-    validMask.create(depth.rows(), depth.cols(), CV_8UC1);
+    validMask.create(depth.rows(), depth.cols(), static_cast<int>(PixelFormat::CV_8UC1));
     
     // 生成有效深度值的掩码
-    if (depth.type() == CV_16UC1 && validMask.type() == CV_8UC1) {
+    if (depth.type() == static_cast<int>(PixelFormat::CV_16UC1) && validMask.type() == static_cast<int>(PixelFormat::CV_8UC1)) {
         uint16_t* depthData = reinterpret_cast<uint16_t*>(const_cast<uint8_t*>(depth.data()));
         uint8_t* maskData = reinterpret_cast<uint8_t*>(validMask.data());
         int totalPixels = depth.rows() * depth.cols();
@@ -131,7 +131,7 @@ funny_Mat DepthInpainter::genValidMask(const funny_Mat& depth)
     }
 
     // 实现简单的膨胀操作，填充小的空洞
-    if (validMask.type() == CV_8UC1) {
+    if (validMask.type() == static_cast<int>(PixelFormat::CV_8UC1)) {
         uint8_t* maskData = reinterpret_cast<uint8_t*>(validMask.data());
         int rows = validMask.rows();
         int cols = validMask.cols();

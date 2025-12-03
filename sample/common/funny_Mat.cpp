@@ -4,6 +4,8 @@
 #include <cstring>
 #include <iostream>
 
+namespace percipio_layer {
+
 // 颜色转换函数实现
 void cvtColor(const funny_Mat& src, funny_Mat& dst, int code) {
     // 检查输入有效性
@@ -14,7 +16,7 @@ void cvtColor(const funny_Mat& src, funny_Mat& dst, int code) {
     
     // 根据转换代码执行不同的转换
     switch (code) {
-        case COLOR_YUV2BGR_YVYU: {
+        case static_cast<int>(ColorConversionCode::YUV2BGR_YVYU): {
             // 确保源图像是8UC2类型
             if (src.type() != CV_8UC2) {
                 std::cerr << "错误: YVYU转换需要8UC2类型的源图像" << std::endl;
@@ -79,7 +81,7 @@ void cvtColor(const funny_Mat& src, funny_Mat& dst, int code) {
             break;
         }
         
-        case COLOR_YUV2BGR_YUYV: {
+        case static_cast<int>(ColorConversionCode::YUV2BGR_YUYV): {
             // 确保源图像是8UC2类型
             if (src.type() != CV_8UC2) {
                 std::cerr << "错误: YUYV转换需要8UC2类型的源图像" << std::endl;
@@ -190,3 +192,5 @@ bool imdecode(const std::vector<uint8_t>& buf, int flags, funny_Mat& dst) {
     std::cout << "警告: imdecode是简化实现，仅用于演示。实际项目中需要使用真正的JPEG解码库。" << std::endl;
     return true;
 }
+
+} // namespace percipio_layer

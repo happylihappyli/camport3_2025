@@ -104,17 +104,17 @@ int main(int argc, char* argv[])
         }
     }, &process_exit);
 
-    if(camera.has_stream(FastCamera::stream_depth) && (w*h) != 0) {
+    if(camera.has_stream(FastCamera::stream_idx::stream_depth) && (w*h) != 0) {
         //Use TYImageMode2 generate image_mode
         //pixel format should modify for some camera, XYZ48 .etc
         TY_IMAGE_MODE image_mode = TYImageMode2(TY_PIXEL_FORMAT_DEPTH16, w, h);
         camera.ResolutionSetting(TY_COMPONENT_DEPTH_CAM, image_mode);
-        camera.stream_enable(FastCamera::stream_depth);
+        camera.stream_enable(FastCamera::stream_idx::stream_depth);
     }
-    if(camera.has_stream(FastCamera::stream_color)) {
+    if(camera.has_stream(FastCamera::stream_idx::stream_color)) {
         //select Image mode in an interactive mode
         camera.ResolutionSetting(TY_COMPONENT_RGB_CAM);
-        camera.stream_enable(FastCamera::stream_color);
+        camera.stream_enable(FastCamera::stream_idx::stream_color);
     }
 
     if(TY_STATUS_OK != camera.start()) {

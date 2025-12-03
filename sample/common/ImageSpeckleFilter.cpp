@@ -107,13 +107,14 @@ ImageSpeckleFilter gSpeckleFilter;
 
 void ImageSpeckleFilter::Compute(funny_Mat &image, int newVal, int maxSpeckleSize, int maxDiff)
 {
-    if(image.type() == CV_8UC1){
+    if(image.type() == static_cast<int>(PixelFormat::CV_8UC1)){
         filterSpecklesImpl<uint8_t>(image, newVal, maxSpeckleSize, maxDiff, _labelBuf);
-    } else if(image.type() == CV_16U || image.type() == CV_16UC1){
+    } else if(image.type() == static_cast<int>(PixelFormat::CV_16U) || image.type() == static_cast<int>(PixelFormat::CV_16UC1)){
         filterSpecklesImpl<uint16_t>(image, newVal, maxSpeckleSize, maxDiff, _labelBuf);
     } else {
         char sz[10];
         sprintf(sz, "%d", image.type());
-        throw std::runtime_error(std::string("ImageSpeckleFilter only support 8u and 16u, not ") + sz);
+        printf("Error: ImageSpeckleFilter only support 8u and 16u, not %s\n", sz);
+        return; // 简单地返回，不进行过滤
     }
 }

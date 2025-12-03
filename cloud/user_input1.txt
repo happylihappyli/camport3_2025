@@ -1,0 +1,26 @@
+用户编程提示记录 - Camport3 图像处理程序修复
+
+任务内容:
+1. 修复Camport3项目的main_fixed.cpp中像素格式处理和FastCamera图像获取方法
+2. 解决编译错误：BAYER8*像素格式重复case值、FastCamera类方法调用错误
+3. 实现TY_IMAGE_DATA到cv::Mat的转换函数，支持多种像素格式
+4. 优化低级API和FastCamera模式的图像处理流程
+
+关键修复点:
+1. TYImageToMat函数：处理MONO、RGB、BAYER等格式转换
+2. 去除BAYER8*格式的重复case值错误
+3. 修复FastCamera方法调用：从read()改为tryGetFrames()
+4. 正确使用TYFrame的depthImage()和colorImage()方法
+5. 添加错误处理和测试图像显示机制
+
+技术要点:
+- 使用TY_PIXEL_FORMAT_LIST枚举定义像素格式
+- TY_IMAGE_DATA结构包含timestamp、width、height、buffer等字段
+- 深度图像需要从16U转换为8U显示
+- FastCamera使用tryGetFrames(1000)获取图像帧
+- PowerShell使用分号;作为命令分隔符
+
+结果:
+- 编译成功，生成main_fixed.exe
+- 程序运行正常，正确处理无设备情况
+- 图像转换函数完整支持多种像素格式

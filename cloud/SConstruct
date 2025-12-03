@@ -1,0 +1,147 @@
+# Cloud点云读取程序构建配置
+# 纯过程的点云读取程序，基于camport3 SDK
+
+import os
+import sys
+import time
+import datetime
+from os.path import join, abspath, exists
+from SCons.Script import *
+
+# 构建开始时间
+build_start_time = time.time()
+
+# 设置控制台编码为UTF-8
+import subprocess
+subprocess.run(['chcp', '65001'], shell=True, capture_output=True)
+
+print("开始配置Cloud点云程序构建系统...")
+print(f"构建开始时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(build_start_time))}")
+print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 开始编译 cloud_point_cloud...")
+
+# 设置构建选项
+opts = Variables()
+opts.Add('OPENCV_DIR', 'OpenCV安装目录路径', 'D:\\Code\\opencv')
+
+# 设置基本路径
+LIB_ROOT_PATH = abspath('../lib/win/hostapp/')
+INCLUDE_PATH = abspath('../include/')
+SAMPLE_V2_CPP_PATH = abspath('../sample/sample_v2/cpp/')
+SAMPLE_V2_HPP_PATH = abspath('../sample/sample_v2/hpp/')
+COMMON_PATH = abspath('../sample/common/')
+
+# 创建环境 - 强制使用 clang-cl
+env = Environment(variables=opts, CC='clang-cl', CXX='clang-cl')
+# 确保 clang-cl 在 PATH
+env.PrependENVPath('PATH', r'C:\Program Files\LLVM\bin')
+
+# 设置UTF-8编码选项 - 解决中文乱码问题
+env.Append(CXXFLAGS=['/utf-8', '/source-charset:utf-8', '/execution-charset:utf-8'])
+env.Append(CCFLAGS=['/utf-8', '/source-charset:utf-8', '/execution-charset:utf-8'])
+
+# 平台特定配置 - Windows平台
+if sys.platform == 'win32':
+    # Windows配置
+    env.Append(CPPPATH=[INCLUDE_PATH, SAMPLE_V2_HPP_PATH, COMMON_PATH])
+
+    # 定义WIN32宏
+    env.Append(CPPDEFINES=['WIN32', '_CRT_SECURE_NO_WARNINGS'])
+    
+    # 添加编译选项 - 使用C++23标准
+    env.Append(CXXFLAGS=['/EHsc', '/std:c++23', '/permissive-'])
+    # 设置控制台输出为UTF-8
+    env.Append(LINKFLAGS=['/SUBSYSTEM:CONSOLE'])
+    env.Append(CPPDEFINES=['_CONSOLE'])
+
+    # 架构选择
+    lib_arch = 'x64'  # 使用64位架构
+    lib_path = join(LIB_ROOT_PATH, lib_arch)
+    env.Append(LIBPATH=[lib_path])
+    
+    # 添加基本库
+    env.Append(LIBS=['tycam'])
+    
+    # 配置OpenCV依赖
+    opencv_dir = env.get('OPENCV_DIR', '')
+    if opencv_dir and os.path.exists(opencv_dir):
+        print(f"使用OpenCV支持构建，路径: {opencv_dir}")
+        # 添加OpenCV头文件路径
+        env.Append(CPPPATH=[join(opencv_dir, 'build', 'include')])
+        # 添加OpenCV库路径
+        env.Append(LIBPATH=[join(opencv_dir, 'build', 'x64', 'vc15', 'lib')])
+        # 添加OpenCV库文件
+        env.Append(LIBS=['opencv_world347'])
+        # 定义OPENCV_DEPENDENCIES宏，启用OpenCV相关代码
+        env.Append(CPPDEFINES=['OPENCV_DEPENDENCIES'])
+    else:
+        print("不使用OpenCV依赖构建")
+    
+    # 添加common库路径
+    env.Append(LIBPATH=[abspath('../sample/')])
+    env.Append(LIBS=['common_lib'])
+    
+    print(f"使用64位架构，库路径: {lib_path}")
+
+# 创建bin目录
+bin_dir = abspath('bin')
+if not os.path.exists(bin_dir):
+    os.makedirs(bin_dir)
+    print(f"创建bin目录: {bin_dir}")
+
+# 创建obj目录
+obj_dir = abspath('obj')
+if not os.path.exists(obj_dir):
+    os.makedirs(obj_dir)
+    print(f"创建obj目录: {obj_dir}")
+
+# 设置目标文件前缀
+env['OBJPREFIX'] = os.path.join(obj_dir, 'cloud_')
+
+# 源文件列表
+sources = ['main.cpp', 
+           '../sample/sample_v2/cpp/FastCamera.cpp', 
+           '../sample/sample_v2/cpp/Device.cpp', 
+           '../sample/sample_v2/cpp/Frame.cpp', 
+           '../sample/common/funny_Mat.cpp',
+           '../sample/common/funny_resize.cpp']
+
+# 构建可执行文件
+print("开始构建cloud_point_cloud程序...")
+program = env.Program(os.path.join(bin_dir, 'cloud_point_cloud.exe'), sources)
+
+# 构建获取真实校准参数的程序
+print("开始构建获取真实校准参数程序...")
+get_calib_sources = ['get_real_calib.cpp']
+get_calib_program = env.Program(os.path.join(bin_dir, 'get_real_calib.exe'), get_calib_sources)
+
+# 构建TY_STATUS测试程序
+# print("开始构建TY_STATUS测试程序...")
+# test_ty_status_sources = ['test_ty_status.cpp']
+# test_ty_status_program = env.Program(os.path.join(bin_dir, 'test_ty_status.exe'), test_ty_status_sources)
+
+# 构建结束时间
+build_end_time = time.time()
+build_duration = build_end_time - build_start_time
+
+print(f"\n构建结束时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(build_end_time))}")
+print(f"构建耗时: {build_duration:.2f} 秒")
+
+# 播放完成提示音
+try:
+    import winsound
+    winsound.Beep(1000, 500)  # 频率1000Hz，持续时间500ms
+except:
+    pass
+
+# 检查构建结果
+if program:
+    print("\n" + "=" * 60)
+    print("Cloud点云程序构建成功!")
+    print("=" * 60)
+    print(f"可执行文件位置: {os.path.join(bin_dir, 'cloud_point_cloud.exe')}")
+    print(f"目标文件位置: {obj_dir}")
+    print("=" * 60)
+else:
+    print("\n构建失败，请检查错误信息")
+
+print("Cloud SConstruct配置完成。")

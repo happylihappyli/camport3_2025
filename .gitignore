@@ -37,3 +37,8 @@ sample/.sconsign.dblite
 /sample/out
 /build
 sample/.sconsign.dblite
+/cloud/bin
+*.meta
+*.raw
+*.bmp
+/debug_outputs

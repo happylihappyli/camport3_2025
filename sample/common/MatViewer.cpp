@@ -93,7 +93,7 @@ void DepthViewer::onMouseCallback(funny_Mat& img, int event, const funny_Point p
     if (pnt.x >= 0 && pnt.x < img.cols() && pnt.y >= 0 && pnt.y < img.rows())
     {
         // 从深度图像获取深度值
-        if (_depth.type() == CV_16U || _depth.type() == CV_16UC1)
+        if (_depth.type() == static_cast<int>(PixelFormat::CV_16U) || _depth.type() == static_cast<int>(PixelFormat::CV_16UC1))
         {
             // 这里可以添加深度图像的特殊处理
             repaint = true;

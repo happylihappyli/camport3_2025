@@ -1,233 +1,306 @@
-#pragma once
+#ifndef DEVICE_HPP
+#define DEVICE_HPP
 
-#include <memory>
 #include <vector>
+#include <string>
+#include <memory>
+#include <map>
+#include <mutex>
 #include <set>
 #include <functional>
-#include <mutex>
-#include <queue>
-#include <thread>
-#include <condition_variable>
-#include <stdint.h>
 
+// 包含Frame.hpp以获取TYFrame定义
 #include "Frame.hpp"
+
+// SDK类型前向声明 - 避免重复包含
+#ifndef TY_SDK_TYPES_DEFINED
+struct TY_EVENT_INFO;
+struct TY_INTERFACE_INFO;
+struct TY_DEVICE_NET_INFO;
+typedef void* TY_DEV_HANDLE;
+typedef void* TY_INTERFACE_HANDLE;
+typedef void* TY_STREAM_HANDLE;
+typedef int32_t TY_EVENT;    // 与SDK保持一致
+// TY_STATUS 已在 common.hpp 中定义，无需重复定义
+#define TY_SDK_TYPES_DEFINED
+#endif
+
+// 注意：以下结构体已在TYApi.h中定义，不需要重复定义
+// struct TY_INTERFACE_INFO {
+//     char id[64];
+//     char name[64];
+//     int type;
+// };
+
+// struct TY_DEVICE_NET_INFO {
+//     char mac[32];
+//     char ip[32];
+//     char netmask[32];
+//     char gateway[32];
+//     char broadcast[32];
+// };
+
+// SDK常量定义 - 已在 common.hpp 中定义，无需重复定义
+#ifndef TY_STATUS_CODES_DEFINED
+#define TY_STATUS_CODES_DEFINED
+#endif
+
+// SDK接口类型常量 - 已在 common.hpp 中定义，无需重复定义
+#ifndef TY_INTERFACE_CONSTANTS_DEFINED
+#define TY_INTERFACE_CONSTANTS_DEFINED
+#endif
+
+// SDK函数前向声明（简化版本）- 已在 common.hpp 中声明，无需重复声明
+#ifndef USE_FULL_SDK_HEADERS
+extern "C" {
+    // 注意：以下函数已在TYApi.h中定义，不需要重复声明
+    // const char* TYErrorString(int32_t status);
+    // int32_t TYUpdateInterfaceList(void);
+    // 注意：以下函数已在TYApi.h中定义，不需要重复声明
+    // int32_t TYGetInterfaceNumber(uint32_t* number);
+    // int32_t TYGetInterfaceList(TY_INTERFACE_INFO* list, uint32_t size, uint32_t* actual);
+    // 注意：以下函数已在TYApi.h中定义，不需要重复声明
+    // int32_t TYOpenInterface(const char* id, TY_INTERFACE_HANDLE* handle);
+    // int32_t TYCloseInterface(TY_INTERFACE_HANDLE handle);
+    // 注意：以下函数已在TYApi.h中定义，不需要重复声明
+    // int32_t TYGetDeviceNumber(TY_INTERFACE_HANDLE handle, uint32_t* number);
+    // 注意：以下函数已在TYApi.h中定义，不需要重复声明
+    // int32_t TYGetDeviceList(TY_INTERFACE_HANDLE handle, void* list, uint32_t size, uint32_t* actual);
+    
+    // 注意：以下函数已在TYApi.h中定义，不需要重复声明
+    // int32_t TYUpdateDeviceList();
+    // int32_t TYOpenDevice(const char* id, TY_DEV_HANDLE* handle);
+    // int32_t TYCloseDevice(TY_DEV_HANDLE handle);
+    // 注意：以下函数已在TYApi.h中定义，不需要重复声明
+    // int32_t TYGetDeviceInfo(TY_DEV_HANDLE handle, void* info);
+    // int32_t TYIsNetworkInterface(int32_t type);
+    // 注意：以下函数已在TYApi.h中定义，不需要重复声明
+    // int32_t TYRegisterEventCallback(TY_DEV_HANDLE handle, void (*callback)(TY_EVENT_INFO*, void*), void* userdata);
+    // int32_t TYUnregisterEventCallback(TY_DEV_HANDLE handle);
+    // 注意：以下函数已在TYApi.h中定义，不需要重复声明
+    // int32_t TYEnableComponents(TY_DEV_HANDLE handle, TY_COMPONENT_ID components);
+    // int32_t TYDisableComponents(TY_DEV_HANDLE handle, TY_COMPONENT_ID components);
+    // int32_t TYGetComponentIDs(TY_DEV_HANDLE handle, TY_COMPONENT_ID* components);
+    // 注意：以下函数已在TYApi.h中定义，不需要重复声明
+    // int32_t TYSetEnum(TY_DEV_HANDLE handle, TY_COMPONENT_ID component, TY_FEATURE_ID feature, int32_t value);
+    // int32_t TYGetEnum(TY_DEV_HANDLE handle, TY_COMPONENT_ID component, TY_FEATURE_ID feature, int32_t* value);
+    // int32_t TYSetInt(TY_DEV_HANDLE handle, TY_COMPONENT_ID component, TY_FEATURE_ID feature, int32_t value);
+    // int32_t TYGetInt(TY_DEV_HANDLE handle, TY_COMPONENT_ID component, TY_FEATURE_ID feature, int32_t* value);
+    // int32_t TYSetFloat(TY_DEV_HANDLE handle, TY_COMPONENT_ID component, TY_FEATURE_ID feature, float value);
+    // int32_t TYGetFloat(TY_DEV_HANDLE handle, TY_COMPONENT_ID component, TY_FEATURE_ID feature, float* value);
+    // int32_t TYSetBool(TY_DEV_HANDLE handle, TY_COMPONENT_ID component, TY_FEATURE_ID feature, bool value);
+    // int32_t TYGetBool(TY_DEV_HANDLE handle, TY_COMPONENT_ID component, TY_FEATURE_ID feature, bool* value);
+    // int32_t TYSetString(TY_DEV_HANDLE handle, TY_COMPONENT_ID component, TY_FEATURE_ID feature, const char* value);
+    // int32_t TYGetString(TY_DEV_HANDLE handle, TY_COMPONENT_ID component, TY_FEATURE_ID feature, char* buffer, uint32_t bufferSize);
+    // 注意：以下函数已在TYApi.h中定义，不需要重复声明
+    // int32_t TYSetStruct(TY_DEV_HANDLE handle, TY_COMPONENT_ID component, TY_FEATURE_ID feature, void* buffer, uint32_t bufferSize);
+    // int32_t TYGetStruct(TY_DEV_HANDLE handle, TY_COMPONENT_ID component, TY_FEATURE_ID feature, void* buffer, uint32_t bufferSize);
+    // 注意：以下函数已在TYApi.h中定义，不需要重复声明
+    // int32_t TYStartCapture(TY_DEV_HANDLE handle);
+    // int32_t TYStopCapture(TY_DEV_HANDLE handle);
+    // int32_t TYEnqueueBuffer(TY_DEV_HANDLE handle, void* buffer, uint32_t size);
+    
+    // 以下函数是自定义封装函数，不在TYApi.h中
+    int32_t TYOpenStream(TY_DEV_HANDLE handle, TY_COMPONENT_ID component, TY_STREAM_HANDLE* stream_handle);
+    int32_t TYCloseStream(TY_STREAM_HANDLE stream_handle);
+    int32_t TYDequeueBuffer(TY_DEV_HANDLE handle, void** buffer, uint32_t* size, void** userdata, uint32_t timeout);
+    int32_t TYQueueBuffer(TY_DEV_HANDLE handle, void* buffer, uint32_t size, void* userdata);
+    int32_t TYGetFrameBuffer(TY_DEV_HANDLE handle, void** buffer, uint32_t* size, void** userdata, uint32_t timeout);
+}
+#endif
 
 namespace percipio_layer {
 
+// 前向声明
+class TYDeviceInfo;
 class TYDevice;
 class DeviceList;
 class TYContext;
+class TYCamInterface;
 class TYFrame;
-class FastCamera;
 
-static std::string parseInterfaceID(std::string &ifaceId)
-{
-    std::string type_s = ifaceId.substr(0, ifaceId.find('-'));
-    if ("usb" == type_s) {
-        //add usb specific parse if needed
+// 设备基础信息结构 - 避免与TY SDK冲突，使用自定义命名
+struct DeviceBaseInfo {
+    DeviceBaseInfo() {
+        memset(this, 0, sizeof(*this));
     }
-    if ("eth" == type_s || "wifi" == type_s) {
-        //eth-2c:f0:5d:ac:5d:6265eea8c0
-        //eth-2c:f0:5d:ac:5d:62
-        size_t IdLength = 18 + type_s.length();
-        std::string new_id = ifaceId.substr(0, IdLength);
-        //                     65eea8c0
-        std::string ip_s = ifaceId.substr(IdLength, ifaceId.size() - IdLength);
-        //base = 16
-        uint32_t ip = static_cast<uint32_t>(std::stoul(ip_s, nullptr, 16));
-        uint8_t *ip_arr = (uint8_t *)&ip;
-        new_id += " ip:";
-        for(int i = 0; i <  3; i++) {
-            new_id += std::to_string((uint32_t) ip_arr[i]) + ".";
-        }
-        new_id += std::to_string((uint32_t) ip_arr[3]);
-        return new_id;
-    }
-    return ifaceId;
-}
-
-class TYDeviceInfo
-{
-    public:
-        ~TYDeviceInfo();
-        TYDeviceInfo(TYDeviceInfo const&) = delete;
-        void operator=(TYDeviceInfo const&) = delete;
-
-        friend class TYDevice;
-        friend class DeviceList;
-
-        const char* id()                                { return _info.id; }
-        const TY_INTERFACE_INFO&  Interface()           { return _info.iface; }
-        
-        const char*    vendorName()
-        {
-            //specific Vendor name for some camera
-            if (strlen(_info.userDefinedName) != 0) {
-                return _info.userDefinedName;
-            } else {
-                return _info.vendorName;
-            }
-        }
-        const char*    modelName()                      { return _info.modelName; }
-        const char*    buildHash()                      { return _info.buildHash; }
-        const char*    configVersion()                  { return _info.configVersion; }
-
-        const TY_VERSION_INFO&     hardwareVersion()    { return _info.hardwareVersion; }
-        const TY_VERSION_INFO&     firmwareVersion()    { return _info.firmwareVersion; }
-
-        const char*    mac();
-        const char*    ip();
-        const char*    netmask();
-        const char*    gateway();
-        const char*    broadcast();
-    private:
-        TYDeviceInfo(const TY_DEVICE_BASE_INFO& info);
-        TY_DEVICE_BASE_INFO _info;
+    
+    char id[64];
+    char name[64];
+    char modelName[64];
+    char serialNumber[64];
+    uint32_t  nChipID;
+    TY_INTERFACE_INFO iface;
+    TY_DEVICE_NET_INFO   netInfo;
 };
 
-typedef std::function<void(void* userdata)>      EventCallback;
-typedef std::pair<void*, EventCallback>          event_pair;
-static void eventCallback(TY_EVENT_INFO *event_info, void *userdata);
-class TYDevice
-{
-    public:
-        ~TYDevice();
-        void operator=(TYDevice const&) = delete;
-
-        friend class FastCamera;
-        friend class TYStream;
-        friend class DeviceList;
-        friend class TYPropertyManager;
-        friend void eventCallback(TY_EVENT_INFO *event_info, void *userdata);
-
-        std::shared_ptr<TYDeviceInfo>           getDeviceInfo();
-        void      registerEventCallback     (const TY_EVENT eventID, void* data, EventCallback cb);
-        
-    private:
-        TYDevice(const TY_DEV_HANDLE handle, const TY_DEVICE_BASE_INFO& info);
-        
-        TY_DEV_HANDLE _handle;
-        TY_DEVICE_BASE_INFO _dev_info;
-
-        std::map<TY_EVENT, event_pair> _eventCallbackMap;
-
-        std::function<void(TY_EVENT_INFO*)> _event_callback;
-        void onDeviceEventCallback(const TY_EVENT_INFO *event_info);
+// 设备信息类
+class TYDeviceInfo {
+public:
+    TYDeviceInfo(const DeviceBaseInfo& info);
+    ~TYDeviceInfo();
+    
+    const char* mac();
+    const char* ip();
+    const char* netmask();
+    const char* gateway();
+    const char* broadcast();
+    
+    const DeviceBaseInfo& info() const { return _info; }
+    
+private:
+    DeviceBaseInfo _info;
 };
 
+// 事件回调类型定义
+typedef std::function<void(void*)> EventCallback;
+
+// 设备类
+class TYDevice {
+public:
+    TYDevice(const TY_DEV_HANDLE handle, const DeviceBaseInfo& info);
+    ~TYDevice();
+    
+    void registerEventCallback(const TY_EVENT eventID, void* data, EventCallback cb);
+    std::shared_ptr<TYDeviceInfo> getDeviceInfo();
+    
+    TY_DEV_HANDLE _handle;
+    
+private:
+    void onDeviceEventCallback(const TY_EVENT_INFO *event_info);
+    static void _event_callback(TY_EVENT_INFO *event_info, void *userdata);
+    friend void eventCallback(TY_EVENT_INFO *event_info, void *userdata);
+    
+    DeviceBaseInfo _dev_info;
+    std::map<TY_EVENT, std::pair<void*, EventCallback>> _eventCallbackMap;
+};
+
+// 设备列表类
 class DeviceList {
-    public:
-        ~DeviceList();
-        DeviceList(DeviceList const&) = delete;
-        void operator=(DeviceList const&) = delete;
-
-        bool empty()    { return devs.size() == 0; }
-        int  devCount() { return devs.size(); }
-
-        std::shared_ptr<TYDeviceInfo>   getDeviceInfo(int idx);
-        std::shared_ptr<TYDevice>       getDevice(int idx);
-        std::shared_ptr<TYDevice>       getDeviceBySN(const char* sn);
-        std::shared_ptr<TYDevice>       getDeviceByIP(const char* ip);
-
-        friend class TYContext;
-    private:
-        std::vector<TY_DEVICE_BASE_INFO> devs;
-        static std::set<TY_INTERFACE_HANDLE> gifaces;
-        DeviceList(std::vector<TY_DEVICE_BASE_INFO>& devices);
+public:
+    DeviceList(std::vector<DeviceBaseInfo>& devices);
+    ~DeviceList();
+    
+    int devCount() const;
+    bool empty() const;
+    
+    std::shared_ptr<TYDeviceInfo> getDeviceInfo(int idx);
+    std::shared_ptr<TYDevice> getDevice(int idx);
+    std::shared_ptr<TYDevice> getDeviceBySN(const char* sn);
+    std::shared_ptr<TYDevice> getDeviceByIP(const char* ip);
+    
+private:
+    std::vector<DeviceBaseInfo> devs;
+    static std::set<TY_INTERFACE_HANDLE> gifaces;
 };
 
-enum ForceIPStyle {
-    ForceIPStyleDynamic = 0,
-    ForceIPStyleForce = 1,
-    ForceIPStyleStatic = 2
+// 相机接口类
+class TYCamInterface {
+public:
+    TYCamInterface();
+    ~TYCamInterface();
+    
+    TY_STATUS Reset();
+    void List(std::vector<std::string>& interfaces);
+    
+private:
+    std::vector<TY_INTERFACE_INFO> ifaces;
 };
 
+// 上下文类
 class TYContext {
 public:
     static TYContext& getInstance() {
         static TYContext instance;
         return instance;
     }
- 
-    TYContext(TYContext const&) = delete;
-    void operator=(TYContext const&) = delete;
- 
+    
     std::shared_ptr<DeviceList> queryDeviceList(const char *iface = nullptr);
     std::shared_ptr<DeviceList> queryNetDeviceList(const char *iface = nullptr);
- 
-    bool ForceNetDeviceIP(const ForceIPStyle style, const std::string& mac, const std::string& ip, const std::string& mask, const std::string& gateway);
-
-private:
-    TYContext() {
-        ASSERT_OK(TYInitLib());
-        TY_VERSION_INFO ver;
-        ASSERT_OK( TYLibVersion(&ver) );
-        std::cout << "=== lib version: " << ver.major << "." << ver.minor << "." << ver.patch << std::endl;
-    }
-
-    ~TYContext() {
-        ASSERT_OK(TYDeinitLib());
-    }
-};
-
-class TYCamInterface
-{
-    public:
-        TYCamInterface();
-        ~TYCamInterface();
-
-        TY_STATUS Reset();
-        void List(std::vector<std::string>& );
-    private:
-        std::vector<TY_INTERFACE_INFO> ifaces;
-};
-
-class FastCamera
-{
-    public:
-    enum stream_idx
-    {
-        stream_depth = 0x1,
-        stream_color = 0x2,
-        stream_ir_left = 0x4,
-        stream_ir_right = 0x8,
-        stream_ir = stream_ir_left
-    };
-        friend class TYFrame;
-        FastCamera();
-        FastCamera(const char* sn);
-        ~FastCamera();
-
-        virtual TY_STATUS open(const char* sn);
-        TY_STATUS setIfaceId(const char* inf);
-        virtual TY_STATUS openByIP(const char* ip);
-        virtual bool has_stream(stream_idx idx);
-        virtual TY_STATUS stream_enable(stream_idx idx);
-        virtual TY_STATUS stream_disable(stream_idx idx);
-
-        virtual TY_STATUS start();
-        virtual TY_STATUS stop();
-        virtual void close();
-
-        std::shared_ptr<TYFrame> tryGetFrames(uint32_t timeout_ms);
-
-        TY_DEV_HANDLE handle() {return device->_handle; }
-
-        void RegisterOfflineEventCallback(EventCallback cb, void* data) { device->registerEventCallback(TY_EVENT_DEVICE_OFFLINE, data, cb); }
     
-    private:
-        std::string     mIfaceId;
-        std::mutex      _dev_lock;
-
-        TY_COMPONENT_ID components = 0;
-#define BUF_CNT      (3)
-
-        bool isRuning = false;
-        std::shared_ptr<TYFrame> fetchFrames(uint32_t timeout_ms);
-        TY_STATUS doStop();
-
-        std::shared_ptr<TYDevice> device;
-        std::vector<uint8_t> stream_buffer[BUF_CNT];
+    // 获取全局接口列表的函数
+    static TY_STATUS updateInterfaceList();
+    
+    enum ForceIPStyle {
+        ForceIPStyleDynamic = 0,
+        ForceIPStyleForce = 1,
+        ForceIPStyleStatic = 2,
+    };
+    
+    bool ForceNetDeviceIP(const ForceIPStyle style, const std::string& mac, 
+                         const std::string& ip, const std::string& mask, 
+                         const std::string& gateway);
+    
+private:
+    TYContext() {}
+    TYContext(const TYContext&) = delete;
+    TYContext& operator=(const TYContext&) = delete;
 };
 
+// FastCamera类 - 简化相机操作
+class FastCamera {
+public:
+    // 流索引枚举
+    enum stream_idx : uint32_t {
+        stream_depth = 0x01,
+        stream_color = 0x02,
+        stream_ir_left = 0x04,
+        stream_ir_right = 0x08,
+        stream_ir = stream_ir_left | stream_ir_right,
+    };
+    
+    FastCamera();
+    FastCamera(const char* sn);
+    virtual ~FastCamera();
+    
+    // 设备操作
+    TY_STATUS open(const char* sn);
+    TY_STATUS openByIP(const char* ip);
+    TY_STATUS openWithHandle(TY_DEV_HANDLE handle);
+    void close();
+    
+    // 流操作
+    bool has_stream(stream_idx idx);
+    TY_STATUS stream_enable(stream_idx idx);
+    TY_STATUS stream_disable(stream_idx idx);
+    
+    // 采集控制
+    TY_STATUS start();
+    TY_STATUS stop();
+    
+    // 帧获取
+    std::shared_ptr<TYFrame> tryGetFrames(uint32_t timeout_ms = 1000);
+    
+    // 设备句柄访问
+    TY_DEV_HANDLE handle() { return device ? device->_handle : nullptr; }
+    
+    // 设置接口ID
+    TY_STATUS setIfaceId(const char* inf);
+    
+protected:
+    TY_STATUS doStop();
+    std::shared_ptr<TYFrame> fetchFrames(uint32_t timeout_ms);
+    
+protected:
+    std::shared_ptr<TYDevice> device;
+    std::mutex _dev_lock;
+    bool isRuning;
+    uint32_t components; // 已启用的组件位图
+    std::string mIfaceId;
+};
+
+// 辅助函数
+static inline std::string parseInterfaceID(const std::string& ifaceId) {
+    if (ifaceId.find("usb") != std::string::npos) {
+        return "USB";
+    } else if (ifaceId.find("eth") != std::string::npos) {
+        return "Ethernet";
+    } else if (ifaceId.find("wlan") != std::string::npos) {
+        return "WiFi";
+    }
+    return "Unknown";
 }
+
+} // namespace percipio_layer
+
+#endif // DEVICE_HPP
